@@ -4,6 +4,10 @@ This eval asks whether the ask criteria in the orchestrator playbook reduce the 
 
 Each case forks a real past session just before an assistant's closing message and lets the model write that closing again under one playbook version. A PreToolUse hook records every tool call, runs the read-only ones and denies the rest, so nothing reaches the outside world. This directory holds the grader and its tests. The runner lives in `eval/fork-replay/`. The cases, the rendered input set and copies of the source sessions live in a private data directory outside the repository, because they contain conversation text.
 
+## Status
+
+This eval is shelved and has no result. A full run of both arms on 16 cases (the ones whose current task, cut at its opening prompt, fits in about 115k tokens) regenerated the whole fork turn, and in the replay sandbox that turn could not be redone as the original agent did it: tests and subagent dispatches were denied, `gh` had no login and some working directories could not be restored, so most closings asked about the broken environment rather than about the next step. Both arms scored about the same and neither number measures the rule. Regenerating only the closing message would fix this, but the question it answers, whether a few playbook lines reduce missed over-asks, is narrower than what the harness claims, so the comparison moved to whole tasks run with and without the harness.
+
 ## Cases
 
 The set has 32 cases. 22 are labeled should-have-just-done-it: the model ought to take the step and report. 10 are rightly-asked controls, where the pending step is paid, external, irreversible, beyond the goal, or a choice that turns on the user's own preferences; they guard against a rule that suppresses every question.
