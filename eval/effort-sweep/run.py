@@ -163,7 +163,7 @@ def efforts_from_bodies(bodies: Path, brief: str) -> dict:
 
 def read_jsonl(path: Path) -> list[dict]:
     out = []
-    with open(path, encoding="utf-8") as fh:
+    with open(path, encoding="utf-8", errors="replace") as fh:
         for line in fh:
             try:
                 out.append(json.loads(line))
@@ -188,6 +188,22 @@ def sum_usage(records: list[dict]) -> tuple[dict, list[str], str | None]:
         for k in usage:
             usage[k] += u.get(k) or 0
     return usage, models, stop
+
+
+def api_failure(stream: list[dict], sub: list[dict]) -> str | None:
+    """Failure class when an API error cut the attempt short, else None.
+
+    Claude Code ends a turn it cannot complete with a `<synthetic>` assistant message, and `sum_usage`
+    leaves those out of the served models, so without this check a subagent stopped by a usage limit
+    would be graded as if it had finished.
+    """
+    limited = any(ev.get("type") == "result" and ev.get("api_error_status") == 429 for ev in stream) or any(
+        ev.get("type") == "rate_limit_event" and (ev.get("rate_limit_info") or {}).get("status") == "rejected"
+        for ev in stream)
+    errors = [r.get("error") for r in sub if r.get("type") == "assistant" and r.get("isApiErrorMessage")]
+    if limited or "rate_limit" in errors:
+        return "rate_limited"
+    return "api_error" if errors else None
 
 
 def first_user_text(records: list[dict]) -> str:
@@ -369,15 +385,15 @@ def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
             return
         wall = time.monotonic() - t0
 
-        session = None
-        for line in (tmp / "stream.jsonl").read_text(encoding="utf-8", errors="replace").splitlines():
-            try:
-                ev = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            session = ev.get("session_id") or session
+        stream = read_jsonl(tmp / "stream.jsonl")
+        session = next((ev["session_id"] for ev in reversed(stream) if ev.get("session_id")), None)
         main_files = list(cfg.glob(f"projects/*/{session}.jsonl")) if session else []
         sub_files = list(cfg.glob(f"projects/*/{session}/subagents/agent-*.jsonl")) if session else []
+        failure = api_failure(stream, read_jsonl(sub_files[0]) if len(sub_files) == 1 else [])
+        if failure:
+            record_error(vdir, case, rep, failure, f"exit {exit_code}; " + next(
+                (str(ev.get("result"))[:300] for ev in stream if ev.get("type") == "result"), "no result event"))
+            return
         if len(sub_files) != 1:
             record_error(vdir, case, rep, "dispatch_missing" if not sub_files else "dispatch_multiple",
                          f"exit {exit_code}; {len(sub_files)} subagent transcripts; stderr tail: "
