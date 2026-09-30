@@ -232,3 +232,21 @@ def test_a_case_holds_its_concurrency_slot_across_all_its_reps():
     c1, c2 = {"id": "c1"}, {"id": "c2"}
     asyncio.run(run.run_groups([(c1, 0), (c1, 1), (c2, 0)], fake, concurrency=1))
     assert order[:4] == [("c1", 0, "start"), ("c1", 0, "end"), ("c1", 1, "start"), ("c1", 1, "end")]
+
+
+@pytest.mark.parametrize("msg, want", [
+    ("Claude Code returned an error result: API Error: Connection error.", True),
+    ("API Error: 529 overloaded_error", True),
+    ("fetch failed: ECONNRESET", True),
+    ("Request timed out.", True),
+    ("Claude Code returned an error result: Reached maximum budget ($3)", False),
+    ("cut_uuid x is not a user prompt", False),
+], ids=["connection", "overloaded", "econnreset", "timed-out", "budget", "harness"])
+def test_network_and_overload_errors_are_retried_in_place(msg, want):
+    # Retrying in place keeps the case's reps back to back, so the prefix cache stays live.
+    assert run.is_retryable(msg) is want
+
+
+def test_default_backoff_stays_inside_the_five_minute_cache():
+    r = run.DEFAULT_CFG["retry"]
+    assert sum(r["base_s"] * 2 ** k * 1.5 for k in range(r["attempts"] - 1)) < 300

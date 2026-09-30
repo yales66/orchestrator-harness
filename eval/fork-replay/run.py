@@ -67,9 +67,16 @@ DEFAULT_CFG = {
         # the TTL, so the 5-minute cache never lapses between them.
         "cache_ttl": "5m",
     },
-    "retry": {"attempts": 3, "base_s": 5.0},
+    # Five attempts with jittered backoff of at most about three minutes in all: a
+    # network drop is waited out in place, and the case's cached prefix is still live.
+    "retry": {"attempts": 5, "base_s": 8.0},
 }
-RETRYABLE = ("overloaded", "529", "429", "rate limit", "rate_limit")
+RETRYABLE = ("overloaded", "529", "429", "rate limit", "rate_limit", "connection error", "econnreset",
+             "econnrefused", "etimedout", "fetch failed", "network", "socket hang up", "timed out", "503", "502")
+
+
+def is_retryable(msg):
+    return any(s in msg.lower() for s in RETRYABLE)
 
 
 # ---------------------------------------------------------------- config dir
@@ -563,7 +570,7 @@ async def run_one(case, rep, cfg, args, grader, out, lock):
             if args.dry_run:
                 print(json.dumps({"id": case["id"], "dry_run_error": msg[:2000]}, ensure_ascii=False))
                 return
-            retry = any(s in msg.lower() for s in RETRYABLE) and k < tries
+            retry = is_retryable(msg) and k < tries
             append(out["errors"], {**err_row, "failure_class": "harness-or-serving", "message": msg[:2000],
                                    "will_retry": retry}, lock)
             if retry:

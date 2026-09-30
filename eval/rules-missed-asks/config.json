@@ -12,6 +12,5 @@
     "max_turns": 40,
     "max_budget_usd": 3.0,
     "permission_mode": "default"
-  },
-  "retry": {"attempts": 3, "base_s": 5.0}
+  }
 }
