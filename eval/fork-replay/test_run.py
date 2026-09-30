@@ -76,7 +76,9 @@ INJECTED = [
                                                                  "additionalContext": OLD_PLAYBOOK}})}},
     {"uuid": "h1", "parentUuid": "h0", "type": "attachment",
      "attachment": {"type": "hook_additional_context", "hookEvent": "SessionStart",
-                    "content": [OLD_PLAYBOOK, "other context"]}},
+                    "content": [OLD_PLAYBOOK, "other context"]},
+     "rendered": [{"content": "<system-reminder>\nSessionStart hook additional context: " + OLD_PLAYBOOK
+                              + "\n</system-reminder>", "isMeta": True}]},
 ] + [dict(r, parentUuid=r["parentUuid"] or "h1") for r in RECORDS]
 
 
@@ -85,6 +87,9 @@ def test_replace_playbook_swaps_every_injected_copy_and_nothing_else(tmp_path):
     assert run.replace_playbook(p, NEW_PLAYBOOK) == 2
     recs = [json.loads(l) for l in open(p)]
     assert recs[1]["attachment"]["content"] == [NEW_PLAYBOOK, "other context"]
+    # Claude Code replays a resumed attachment from its pre-rendered text.
+    assert recs[1]["rendered"][0]["content"] == ("<system-reminder>\nSessionStart hook additional context: "
+                                                 + NEW_PLAYBOOK + "\n</system-reminder>")
     out = json.loads(recs[0]["attachment"]["stdout"])["hookSpecificOutput"]["additionalContext"]
     assert out == NEW_PLAYBOOK
     assert OLD_PLAYBOOK not in open(p).read()

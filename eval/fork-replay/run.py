@@ -188,8 +188,8 @@ def replace_playbook(path, text):
 
     The injected playbook is replayed to the model from the transcript, not reloaded
     from the configuration, so the session copy itself has to carry the version under
-    test. Both records are rewritten: the hook_additional_context the model reads and
-    the hook_success stdout it came from.
+    test. Both records are rewritten: the hook_additional_context, including the
+    rendered text a resume replays to the model, and the hook_success stdout it came from.
     """
     def swap(s):
         return (text, 1) if isinstance(s, str) and PLAYBOOK_HEAD.match(s) else (s, 0)
@@ -200,9 +200,19 @@ def replace_playbook(path, text):
             r = json.loads(line)
             a = r.get("attachment") if isinstance(r.get("attachment"), dict) else {}
             if a.get("hookEvent") == "SessionStart" and a.get("type") == "hook_additional_context":
+                olds = [c for c in a.get("content") or [] if swap(c)[1]]
                 swapped = [swap(c) for c in a.get("content") or []]
                 a["content"] = [c for c, _ in swapped]
                 n += sum(k for _, k in swapped)
+                # A resumed session is replayed from the record's pre-rendered text, not
+                # from attachment.content, so the playbook inside it is swapped as well.
+                for item in r.get("rendered") or []:
+                    for old in olds:
+                        if isinstance(item.get("content"), str) and old in item["content"]:
+                            item["content"] = item["content"].replace(old, text)
+                            olds = [o for o in olds if o != old]
+                if r.get("rendered") and olds:
+                    raise ValueError(f"injected playbook not found in the rendered text of {path}")
                 line = json.dumps(r, ensure_ascii=False) + "\n"
             elif a.get("hookEvent") == "SessionStart" and a.get("type") == "hook_success" and a.get("stdout"):
                 try:
