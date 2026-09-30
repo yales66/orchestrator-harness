@@ -69,6 +69,8 @@ def validate_case(case):
                     problems.append(f"expected[{i}]: the only final-message expectation is {ASK}")
             else:
                 problems += _rule_problems(f"expected[{i}]", r)
+    if "cut_uuid" in case and not (case["cut_uuid"] is None or isinstance(case["cut_uuid"], str)):
+        problems.append("cut_uuid must be null or a record uuid")
     if not isinstance(case["tags"], list) or not all(isinstance(t, str) for t in case["tags"]):
         problems.append("tags must be a list of strings")
     return problems

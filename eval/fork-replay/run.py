@@ -237,6 +237,58 @@ def replace_playbook(path, text):
     return n
 
 
+def is_prompt(rec):
+    """A real user prompt: typed by the user, not a meta record or a tool result."""
+    content = (rec.get("message") or {}).get("content")
+    return rec.get("type") == "user" and not rec.get("isMeta") and (
+        isinstance(content, str) or any(b.get("type") == "text" for b in content or []))
+
+
+# Attachment types that describe the session rather than any one task. A fresh
+# session started for the kept task would carry equivalents, so a cut keeps them.
+SESSION_LEVEL = {"skill_listing", "deferred_tools_delta", "agent_listing_delta", "mcp_instructions_delta",
+                 "environment", "model", "date", "instructions", "session_context", "auto_mode"}
+
+
+def cut_session(path, cut_uuid):
+    """Drop the earlier tasks of a session copy so it starts at the prompt cut_uuid.
+
+    Records before the first real prompt (the SessionStart injections) stay, and so
+    do session-level attachments from the dropped stretch; every other record from
+    the first prompt up to cut_uuid goes, and the chain is relinked. The result reads
+    like a session in which the user opened the kept task first. Returns the number
+    of records dropped.
+    """
+    recs = [json.loads(l) for l in open(path, encoding="utf-8") if l.strip()]
+    pos = {r["uuid"]: i for i, r in enumerate(recs) if r.get("uuid")}
+    if cut_uuid not in pos or not is_prompt(recs[pos[cut_uuid]]):
+        raise ValueError(f"cut_uuid {cut_uuid} is not a user prompt in {path}")
+    first = next(i for i, r in enumerate(recs) if r.get("uuid") and is_prompt(r))
+    cut = pos[cut_uuid]
+    if cut <= first:
+        raise ValueError("cut_uuid must be a prompt after the session's first one")
+
+    def keep(i):
+        r = recs[i]
+        a = r.get("attachment") if isinstance(r.get("attachment"), dict) else {}
+        return i < first or i >= cut or (r.get("type") == "attachment" and (
+            a.get("type") in SESSION_LEVEL or a.get("hookEvent") == "SessionStart"))
+
+    chain, cur = [], recs[cut]
+    while cur is not None:
+        chain.append(pos[cur["uuid"]])
+        cur = recs[pos[cur["parentUuid"]]] if cur.get("parentUuid") in pos else None
+    prev = None
+    for i in reversed(chain):
+        if keep(i):
+            recs[i]["parentUuid"] = prev
+            prev = recs[i]["uuid"]
+    out = [r for i, r in enumerate(recs) if not r.get("uuid") or keep(i)]
+    with open(path, "w", encoding="utf-8") as f:
+        f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in out)
+    return len(recs) - len(out)
+
+
 def fork_plan(case):
     """(resume_session_at, prompt, rewound) for the case's fork mode."""
     if case["fork_mode"] == "after":
@@ -250,9 +302,7 @@ def fork_plan(case):
     cur, rewound = recs.get(case["fork_uuid"]), 0
     while cur is not None:
         content = (cur.get("message") or {}).get("content")
-        is_prompt = cur.get("type") == "user" and not cur.get("isMeta") and (
-            isinstance(content, str) or any(b.get("type") == "text" for b in content or []))
-        if is_prompt:
+        if is_prompt(cur):
             if not cur.get("parentUuid"):
                 raise ValueError("before mode cannot fork at the first turn of a session")
             text = content if isinstance(content, str) else "\n".join(
@@ -395,8 +445,31 @@ def build_options(case, cfg, args, cwd, cfgdir, home, resume_at, stderr_path, ra
     return ClaudeAgentOptions(**kw)
 
 
+def attempt_root(case, variant):
+    """The attempt's temp directory: fixed per case and variant, the same for every rep.
+
+    Its path reaches the system prompt (the memory directory) and the CLAUDE.md
+    reminder, so a fixed path keeps the request prefix identical across reps and lets
+    every rep after the first read the prefix from the prompt cache.
+    """
+    return os.path.join(TMP_ROOT, f"fr-{case['id'][:12]}-{variant}")
+
+
+def group_reps(todo):
+    """[(case, rep)] grouped per case, reps in order, so one case's reps run one after another."""
+    groups = {}
+    for c, k in todo:
+        groups.setdefault(c["id"], []).append((c, k))
+    return [sorted(g, key=lambda ck: ck[1]) for g in groups.values()]
+
+
 async def attempt(case, rep, cfg, args):
-    root = tempfile.mkdtemp(prefix=f"fr-{case['id'][:8]}-r{rep}-", dir=TMP_ROOT)
+    root = attempt_root(case, args.variant)
+    if os.path.exists(root):  # left by an interrupted attempt or by --keep
+        shutil.rmtree(root)
+        if case["cwd_repo"] and os.path.isdir(resolve_repo(case["cwd_repo"])[0]):
+            subprocess.run(["git", "-C", resolve_repo(case["cwd_repo"])[0], "worktree", "prune"], capture_output=True)
+    os.makedirs(root)
     wt = None
     try:
         cwd, wt = prepare_cwd(case, root, args.unrestorable_cwd)
@@ -407,11 +480,12 @@ async def attempt(case, rep, cfg, args):
         os.makedirs(home)
         placed = place_session(case, cfgdir, cwd)
         replaced = replace_playbook(placed, playbook) if playbook is not None else 0
-        resume_at, prompt, rewound = fork_plan(case)
+        dropped = cut_session(placed, case["cut_uuid"]) if case.get("cut_uuid") else 0
+        resume_at, prompt, rewound = fork_plan(dict(case, source_session=placed))
         if args.dry_run:
             return {"dry_run": True, "cwd": cwd, "worktree": wt, "session": placed,
                     "resume_session_at": resume_at, "rewound_assistant_records": rewound,
-                    "playbooks_replaced": replaced,
+                    "playbooks_replaced": replaced, "records_cut": dropped,
                     "prompt_head": prompt[:120], "settings": json.load(open(os.path.join(cfgdir, "settings.json")))}
         from claude_agent_sdk import query
         raw = os.path.join(os.path.abspath(args.raw_bodies), f"{case['id']}_rep{rep}") if args.raw_bodies else None
@@ -554,7 +628,11 @@ async def main_async(args):
     sem = asyncio.Semaphore(args.concurrency)
     reps = 1 if args.dry_run else args.reps
     todo = [(c, k) for c in cases for k in range(reps) if (c["id"], k) not in done]
-    await asyncio.gather(*(run_one(c, k, cfg, args, grader, out, lock, sem) for c, k in todo))
+    async def run_group(group):
+        for c, k in group:
+            await run_one(c, k, cfg, args, grader, out, lock, sem)
+
+    await asyncio.gather(*(run_group(g) for g in group_reps(todo)))
     if not args.dry_run:
         summarize(out["results"], cfg.get("primary_metric", "held"))
 

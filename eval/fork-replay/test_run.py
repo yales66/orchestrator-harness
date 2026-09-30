@@ -160,3 +160,54 @@ def test_replays_run_at_effort_high_by_default(tmp_path, monkeypatch):
     case = {"source_session": "/s/abc.jsonl"}
     opts = run.build_options(case, run.DEFAULT_CFG, args, "/cwd", "/cfg", "/home", "u1", str(tmp_path / "err.log"))
     assert opts["effort"] == "high"
+
+
+CUT_RECORDS = [
+    {"type": "mode", "mode": "default"},
+    {"uuid": "h0", "parentUuid": None, "type": "attachment",
+     "attachment": {"type": "hook_additional_context", "hookEvent": "SessionStart", "content": [OLD_PLAYBOOK]}},
+    {"uuid": "u0", "parentUuid": "h0", "type": "user", "message": {"content": "earlier task"}},
+    {"uuid": "s0", "parentUuid": "u0", "type": "attachment", "attachment": {"type": "skill_listing", "content": "skills"}},
+    {"uuid": "x0", "parentUuid": "s0", "type": "attachment", "attachment": {"type": "edited_text_file", "content": "f"}},
+    {"uuid": "a0", "parentUuid": "x0", "type": "assistant", "message": {"content": [{"type": "text", "text": "done"}]}},
+    {"uuid": "u1", "parentUuid": "a0", "type": "user", "message": {"content": [{"type": "text", "text": "new task"}]}},
+    {"uuid": "a1", "parentUuid": "u1", "type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Read", "input": {}}]}},
+    {"uuid": "t1", "parentUuid": "a1", "type": "user", "message": {"content": [{"type": "tool_result", "content": "..."}]}},
+    {"uuid": "u2", "parentUuid": "t1", "type": "user", "message": {"content": "go on"}},
+    {"uuid": "a2", "parentUuid": "u2", "type": "assistant", "message": {"content": [{"type": "text", "text": "Shall I push?"}]}},
+]
+
+
+def test_cut_session_drops_the_earlier_task_but_keeps_session_level_records(tmp_path):
+    p = write_session(tmp_path, CUT_RECORDS)
+    assert run.cut_session(p, "u1") == 3
+    recs = [json.loads(l) for l in open(p)]
+    assert [r.get("uuid") for r in recs] == [None, "h0", "s0", "u1", "a1", "t1", "u2", "a2"]
+    parent = {r["uuid"]: r["parentUuid"] for r in recs if r.get("uuid")}
+    assert parent["s0"] == "h0" and parent["u1"] == "s0" and parent["a1"] == "u1"
+
+
+def test_before_mode_resumes_on_the_cut_chain(tmp_path):
+    p = write_session(tmp_path, CUT_RECORDS)
+    run.cut_session(p, "u2")
+    assert run.fork_plan(case(p, "before", "a2", None)) == ("s0", "go on", 1)
+
+
+@pytest.mark.parametrize("cut", ["nope", "t1", "u0"], ids=["missing", "tool-result", "first-prompt"])
+def test_cut_session_refuses_a_cut_that_is_not_a_later_prompt(tmp_path, cut):
+    p = write_session(tmp_path, CUT_RECORDS)
+    with pytest.raises(ValueError):
+        run.cut_session(p, cut)
+
+
+def test_attempt_root_is_the_same_for_every_rep_of_a_case_and_variant():
+    # The path reaches the system prompt, so a fixed one lets later reps read the cached prefix.
+    a = run.attempt_root({"id": "abc123def456789"}, "baseline")
+    assert a == run.attempt_root({"id": "abc123def456789"}, "baseline")
+    assert a != run.attempt_root({"id": "abc123def456789"}, "v1")
+    assert os.path.dirname(a) == run.TMP_ROOT
+
+
+def test_reps_of_one_case_are_grouped_to_run_in_order():
+    c1, c2 = {"id": "c1"}, {"id": "c2"}
+    assert run.group_reps([(c1, 1), (c2, 0), (c1, 0)]) == [[(c1, 0), (c1, 1)], [(c2, 0)]]
