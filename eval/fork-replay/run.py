@@ -62,6 +62,10 @@ DEFAULT_CFG = {
         # The sessions being replayed ran at high, which the installed configurations
         # do not set, and claude-opus-5-5 otherwise defaults to medium.
         "effort": "high",
+        # Claude Code writes the cache at the 1-hour TTL by default, which costs 8/5 of
+        # the 5-minute write. Reps of a case run back to back, each request refreshes
+        # the TTL, so the 5-minute cache never lapses between them.
+        "cache_ttl": "5m",
     },
     "retry": {"attempts": 3, "base_s": 5.0},
 }
@@ -401,9 +405,11 @@ def check_harness(args, flow):
 
 # ---------------------------------------------------------------- one attempt
 
-def child_env(cfgdir, home, model, raw_bodies=None):
+def child_env(cfgdir, home, model, raw_bodies=None, cache_ttl="1h"):
     env = {"CLAUDE_CONFIG_DIR": cfgdir, "HOME": home, "DISABLE_AUTOUPDATER": "1",
            "CLAUDE_CODE_SUBAGENT_MODEL": model}
+    if cache_ttl == "5m":
+        env["FORCE_PROMPT_CACHING_5M"] = "1"
     if raw_bodies:
         # Claude Code writes each request body it sends into this directory, which is
         # how a trial run checks what prefix the model actually saw.
@@ -414,7 +420,7 @@ def child_env(cfgdir, home, model, raw_bodies=None):
 def build_options(case, cfg, args, cwd, cfgdir, home, resume_at, stderr_path, raw_bodies=None):
     from claude_agent_sdk import ClaudeAgentOptions
     sdk = cfg["sdk"]
-    env = child_env(cfgdir, home, args.model, raw_bodies)
+    env = child_env(cfgdir, home, args.model, raw_bodies, sdk.get("cache_ttl", "1h"))
     err = open(stderr_path, "a", encoding="utf-8")
     kw = dict(
         cwd=cwd,
@@ -527,63 +533,78 @@ def usage_dict(result):
     return {k: int(u.get(k, 0) or 0) for k in keys}
 
 
-async def run_one(case, rep, cfg, args, grader, out, lock, sem):
-    async with sem:
-        tries = cfg["retry"]["attempts"]
-        for k in range(1, tries + 1):
-            err_row = {"prompt_id": case["id"], "rep": rep, "attempt": k, "variant": args.variant}
-            try:
-                r = await asyncio.wait_for(attempt(case, rep, cfg, args), args.timeout_s)
-            except asyncio.TimeoutError:
-                append(out["errors"], {**err_row, "failure_class": "timeout"}, lock)
-                return
-            except Exception as e:  # harness or serving error
-                msg = str(e)
-                if args.dry_run:
-                    print(json.dumps({"id": case["id"], "dry_run_error": msg[:2000]}, ensure_ascii=False))
-                    return
-                retry = any(s in msg.lower() for s in RETRYABLE) and k < tries
-                append(out["errors"], {**err_row, "failure_class": "harness-or-serving", "message": msg[:2000],
-                                       "will_retry": retry}, lock)
-                if retry:
-                    await asyncio.sleep(cfg["retry"]["base_s"] * 2 ** (k - 1) * (0.5 + random.random()))
-                    continue
-                return
-            if args.dry_run:
-                print(json.dumps({"id": case["id"], **r}, ensure_ascii=False, indent=2))
-                return
-            res = r["result"]
-            served_ok = all(m.startswith(args.model) for m in r["models"])
-            if not served_ok:
-                append(out["errors"], {**err_row, "failure_class": "served-model-mismatch",
-                                       "model": r["models"], "usage": usage_dict(res)}, lock)
-                return
-            try:
-                g = grader.grade(case, r["traj"], cfg)
-            except Exception as e:
-                append(out["errors"], {**err_row, "failure_class": "grader-error", "message": str(e)[:2000],
-                                       "model": r["models"], "usage": usage_dict(res)}, lock)
-                return
-            subtype = getattr(res, "subtype", None)
-            stop = getattr(res, "stop_reason", None) or subtype
-            status = "truncated" if stop in ("max_tokens", "error_max_turns", "error_max_budget_usd") else "ok"
-            trace_rel = f"traces/{case['id']}_rep{rep}.json"
-            json.dump(r["trace"], open(os.path.join(out["dir"], trace_rel), "w", encoding="utf-8"),
-                      ensure_ascii=False, indent=1)
-            append(out["results"], {
-                "prompt_id": case["id"], "rep": rep, "prompt": case["resume_input"] if case["fork_mode"] == "after" else r["trace"][0]["content"],
-                "tags": case["tags"], "stop_reason": stop, "status": status,
-                "grade": g["grade"], "explanation": g.get("explanation", {}),
-                "model": r["models"][0] if r["models"] else args.model, "usage": usage_dict(res),
-                "latency_s": r["latency_s"], "tool_calls": len(r["calls"]),
-                "meta": {"outcome": g.get("outcome"), "first_action": g.get("first_action"),
-                         "attempts": k, "num_turns": getattr(res, "num_turns", None),
-                         "reported_cost_usd": getattr(res, "total_cost_usd", None),
-                         "fork_session_id": getattr(res, "session_id", None),
-                         "rewound_assistant_records": r["rewound"], "fork_mode": case["fork_mode"]},
-                "trace": trace_rel,
-            }, lock)
+async def run_groups(todo, run, concurrency):
+    """Run (case, rep) pairs, reps of a case in order and holding one slot throughout.
+
+    Holding the slot keeps a case's reps back to back, so no other case's attempt
+    runs between them and the prefix cache written by the first rep is still live.
+    """
+    sem = asyncio.Semaphore(concurrency)
+
+    async def one_case(group):
+        async with sem:
+            for c, k in group:
+                await run(c, k)
+
+    await asyncio.gather(*(one_case(g) for g in group_reps(todo)))
+
+
+async def run_one(case, rep, cfg, args, grader, out, lock):
+    tries = cfg["retry"]["attempts"]
+    for k in range(1, tries + 1):
+        err_row = {"prompt_id": case["id"], "rep": rep, "attempt": k, "variant": args.variant}
+        try:
+            r = await asyncio.wait_for(attempt(case, rep, cfg, args), args.timeout_s)
+        except asyncio.TimeoutError:
+            append(out["errors"], {**err_row, "failure_class": "timeout"}, lock)
             return
+        except Exception as e:  # harness or serving error
+            msg = str(e)
+            if args.dry_run:
+                print(json.dumps({"id": case["id"], "dry_run_error": msg[:2000]}, ensure_ascii=False))
+                return
+            retry = any(s in msg.lower() for s in RETRYABLE) and k < tries
+            append(out["errors"], {**err_row, "failure_class": "harness-or-serving", "message": msg[:2000],
+                                   "will_retry": retry}, lock)
+            if retry:
+                await asyncio.sleep(cfg["retry"]["base_s"] * 2 ** (k - 1) * (0.5 + random.random()))
+                continue
+            return
+        if args.dry_run:
+            print(json.dumps({"id": case["id"], **r}, ensure_ascii=False, indent=2))
+            return
+        res = r["result"]
+        served_ok = all(m.startswith(args.model) for m in r["models"])
+        if not served_ok:
+            append(out["errors"], {**err_row, "failure_class": "served-model-mismatch",
+                                   "model": r["models"], "usage": usage_dict(res)}, lock)
+            return
+        try:
+            g = grader.grade(case, r["traj"], cfg)
+        except Exception as e:
+            append(out["errors"], {**err_row, "failure_class": "grader-error", "message": str(e)[:2000],
+                                   "model": r["models"], "usage": usage_dict(res)}, lock)
+            return
+        subtype = getattr(res, "subtype", None)
+        stop = getattr(res, "stop_reason", None) or subtype
+        status = "truncated" if stop in ("max_tokens", "error_max_turns", "error_max_budget_usd") else "ok"
+        trace_rel = f"traces/{case['id']}_rep{rep}.json"
+        json.dump(r["trace"], open(os.path.join(out["dir"], trace_rel), "w", encoding="utf-8"),
+                  ensure_ascii=False, indent=1)
+        append(out["results"], {
+            "prompt_id": case["id"], "rep": rep, "prompt": case["resume_input"] if case["fork_mode"] == "after" else r["trace"][0]["content"],
+            "tags": case["tags"], "stop_reason": stop, "status": status,
+            "grade": g["grade"], "explanation": g.get("explanation", {}),
+            "model": r["models"][0] if r["models"] else args.model, "usage": usage_dict(res),
+            "latency_s": r["latency_s"], "tool_calls": len(r["calls"]),
+            "meta": {"outcome": g.get("outcome"), "first_action": g.get("first_action"),
+                     "attempts": k, "num_turns": getattr(res, "num_turns", None),
+                     "reported_cost_usd": getattr(res, "total_cost_usd", None),
+                     "fork_session_id": getattr(res, "session_id", None),
+                     "rewound_assistant_records": r["rewound"], "fork_mode": case["fork_mode"]},
+            "trace": trace_rel,
+        }, lock)
+        return
 
 
 def wilson(p, n, z=1.96):
@@ -625,14 +646,9 @@ async def main_async(args):
     if os.path.exists(out["results"]):
         done = {(r["prompt_id"], r["rep"]) for r in map(json.loads, open(out["results"], encoding="utf-8"))}
     lock = threading.Lock()
-    sem = asyncio.Semaphore(args.concurrency)
     reps = 1 if args.dry_run else args.reps
     todo = [(c, k) for c in cases for k in range(reps) if (c["id"], k) not in done]
-    async def run_group(group):
-        for c, k in group:
-            await run_one(c, k, cfg, args, grader, out, lock, sem)
-
-    await asyncio.gather(*(run_group(g) for g in group_reps(todo)))
+    await run_groups(todo, lambda c, k: run_one(c, k, cfg, args, grader, out, lock), args.concurrency)
     if not args.dry_run:
         summarize(out["results"], cfg.get("primary_metric", "held"))
 

@@ -211,3 +211,24 @@ def test_attempt_root_is_the_same_for_every_rep_of_a_case_and_variant():
 def test_reps_of_one_case_are_grouped_to_run_in_order():
     c1, c2 = {"id": "c1"}, {"id": "c2"}
     assert run.group_reps([(c1, 1), (c2, 0), (c1, 0)]) == [[(c1, 0), (c1, 1)], [(c2, 0)]]
+
+
+def test_replays_write_the_cache_at_the_five_minute_ttl_by_default():
+    # Reps of a case run back to back, so the cheaper 5-minute write never lapses between them.
+    assert run.child_env("/cfg", "/home", "claude-opus-5-5", None, "5m")["FORCE_PROMPT_CACHING_5M"] == "1"
+    assert "FORCE_PROMPT_CACHING_5M" not in run.child_env("/cfg", "/home", "claude-opus-5-5", None, "1h")
+    assert run.DEFAULT_CFG["sdk"]["cache_ttl"] == "5m"
+
+
+def test_a_case_holds_its_concurrency_slot_across_all_its_reps():
+    import asyncio
+    order = []
+
+    async def fake(c, k):
+        order.append((c["id"], k, "start"))
+        await asyncio.sleep(0)
+        order.append((c["id"], k, "end"))
+
+    c1, c2 = {"id": "c1"}, {"id": "c2"}
+    asyncio.run(run.run_groups([(c1, 0), (c1, 1), (c2, 0)], fake, concurrency=1))
+    assert order[:4] == [("c1", 0, "start"), ("c1", 0, "end"), ("c1", 1, "start"), ("c1", 1, "end")]
