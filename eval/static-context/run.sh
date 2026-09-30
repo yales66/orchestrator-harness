@@ -15,7 +15,13 @@
 #
 # Env knobs: SC_COPY (en or zh, default en; zh writes results.zh.*), SC_MODEL (default claude-opus-5-5), SC_REPEATS (default 2),
 # SC_WORK (temp dir to keep raw logs in), SC_MAX_INPUT (abort threshold,
-# default 100000 tokens of first-request input).
+# default 100000 tokens of first-request input), SC_RETRIES (rounds of reruns
+# for runs that `parse_usage.py check` finds not comparable, default 3).
+#
+# SC_MODEL must be a full model id containing opus, sonnet, haiku or fable: the
+# prompt passes that alias as the Agent tool's model parameter, because the
+# installed playbook tells the main thread to pick a subagent model itself and
+# CLAUDE_CODE_SUBAGENT_MODEL does not override an explicit one.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,11 +34,20 @@ OUT="results"
 export SC_PLAYBOOK="$SRC/orchestrator-playbook.md"
 MODEL="${SC_MODEL:-claude-opus-5-5}"
 REPEATS="${SC_REPEATS:-2}"
+RETRIES="${SC_RETRIES:-3}"
 MAX_INPUT="${SC_MAX_INPUT:-100000}"
 WORK="${SC_WORK:-$(mktemp -d "${TMPDIR:-/tmp}/static-context.XXXXXX")}"
 mkdir -p "$WORK"
 
-PROMPT='Call the Agent tool (also named Task) exactly once, with subagent_type "general-purpose", description "Reply OK", and prompt "Reply with exactly: OK". Do not call any other tool and do not read any file. After the Agent tool returns, reply with exactly: DONE'
+case "$MODEL" in
+  *opus*) ALIAS=opus ;;
+  *sonnet*) ALIAS=sonnet ;;
+  *haiku*) ALIAS=haiku ;;
+  *fable*) ALIAS=fable ;;
+  *) echo "SC_MODEL must name opus, sonnet, haiku or fable: $MODEL" >&2; exit 2 ;;
+esac
+
+PROMPT='Call the Agent tool (also named Task) exactly once, with subagent_type "general-purpose", model "'"$ALIAS"'", description "Reply OK", and prompt "Reply with exactly: OK". Do not call any other tool and do not read any file. After the Agent tool returns, reply with exactly: DONE'
 
 # settings.json for H/N: the hooks block of en/settings.example.json with
 # $HOME/.claude rewritten to the temp config dir; N also drops SessionStart.
@@ -70,10 +85,11 @@ install_config() {  # $1 variant, $2 config dir
   esac
 }
 
-run_one() {  # $1 variant, $2 repeat index
+run_one() {  # $1 variant, $2 repeat index, $3 attempts discarded so far (default 0)
   local v="$1" i="$2" dir="$WORK/$1-$2"
   rm -rf "$dir"
   mkdir -p "$dir/home" "$dir/cwd"
+  echo "${3:-0}" > "$dir/discarded_attempts"
   install_config "$v" "$dir/config"
   echo "running $v #$i in $dir" >&2
   (
@@ -123,6 +139,21 @@ for i in $(seq 1 "$REPEATS"); do
     run_one "$v" "$i"
   done
 done
+
+# Rerun, in place, every run whose subagent model or deferred tool set makes it
+# not comparable; the discard count survives in the run directory.
+round=0
+redo="$(python3 "$HERE/parse_usage.py" check "$WORK" "$MODEL")"
+while [ -n "$redo" ] && [ "$round" -lt "$RETRIES" ]; do
+  round=$((round + 1))
+  echo "retry round $round of $RETRIES:" $redo >&2
+  for name in $redo; do
+    n="$(cat "$WORK/$name/discarded_attempts" 2>/dev/null || echo 0)"
+    run_one "${name%-*}" "${name#*-}" "$((n + 1))"
+  done
+  redo="$(python3 "$HERE/parse_usage.py" check "$WORK" "$MODEL")"
+done
+[ -z "$redo" ] || echo "still invalid after $RETRIES retry rounds, marked in the results:" $redo >&2
 
 python3 "$HERE/parse_usage.py" aggregate "$WORK" "$HERE/$OUT.json" "$HERE/$OUT.md" \
   "$(claude --version | awk '{print $1}')" "$MODEL" "$REPEATS" "$COPY"

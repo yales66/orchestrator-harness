@@ -18,9 +18,11 @@ export CLAUDE_CODE_OAUTH_TOKEN=<token printed by claude setup-token>
 bash eval/static-context/run.sh
 ```
 
-`ANTHROPIC_API_KEY` works in place of the OAuth token. The token is handed to the child process through its environment and is never written to disk. The script runs each group twice with `claude-opus-5-5` for both the main thread and the subagent, rewrites `results.json` and `results.md`, and prints the temp directory that keeps the raw stream and transcript logs. It stops early if a thread's first-request input exceeds 100000 tokens or if a thread made no API request.
+`ANTHROPIC_API_KEY` works in place of the OAuth token. The token is handed to the child process through its environment and is never written to disk. The script runs each group twice with `claude-opus-5-5` for both the main thread and the subagent, rewrites `results.json` and `results.md`, and prints the temp directory that keeps the raw stream and transcript logs. It stops early if a thread's first-request input exceeds 100000 tokens or if a thread made no API request. The prompt asks the main thread to pass the requested model's alias (opus, sonnet, haiku or fable, read from `SC_MODEL`) as the Agent tool's model parameter, because the installed playbook tells the main thread to choose a subagent model itself and `CLAUDE_CODE_SUBAGENT_MODEL` does not override an explicit choice.
 
-`SC_SETUP_ONLY=1 bash eval/static-context/run.sh` builds the two config directories without calling the API, which is useful for inspecting exactly what each group installs. `SC_COPY=zh` installs the Chinese copy instead of `en/` and writes `results.zh.json` and `results.zh.md`. `SC_MODEL`, `SC_REPEATS`, `SC_WORK` and `SC_MAX_INPUT` override the model, the repeat count, the log directory and the abort threshold.
+Only comparable runs enter the comparison. After the planned runs finish, `python3 parse_usage.py check <work_dir> <model>` prints the run directories to discard: a run whose subagent ran on a model other than `<model>`, and among the remaining runs one whose main thread or subagent was announced a different set of deferred tools than the reference set for that thread, which is the set most of those runs received, or the smaller set on a tie. The deferred tool sets come from the `deferred_tools_delta` attachments in the session transcripts, because Claude Code occasionally announces extra deferred tools to a session and they add to the first-request input. `run.sh` reruns the listed runs in place and checks again, for up to `SC_RETRIES` rounds (default 3), and counts each discarded attempt in the run directory's `discarded_attempts` file. A run still invalid after the last round keeps its row in `results.md` with Valid set to no; the repeat consistency and group difference tables use only valid runs, take the first valid run of each group, and show n/a when a group has none.
+
+`SC_SETUP_ONLY=1 bash eval/static-context/run.sh` builds the two config directories without calling the API, which is useful for inspecting exactly what each group installs. `SC_COPY=zh` installs the Chinese copy instead of `en/` and writes `results.zh.json` and `results.zh.md`. `SC_MODEL`, `SC_REPEATS`, `SC_WORK`, `SC_MAX_INPUT` and `SC_RETRIES` override the model (a full model id naming opus, sonnet, haiku or fable), the repeat count, the log directory, the abort threshold and the number of rerun rounds.
 
 The numbers in `results.md` were measured on Claude Code 2.1.285 with `claude-opus-5-5` for both the main thread and the subagent. Claude Code's own system prompt and tool definitions change from version to version, so the absolute numbers hold only for 2.1.285, and another version needs a rerun of this script.
 
@@ -38,9 +40,9 @@ The subagent's first-request input is 3,303 tokens lower in H, about 24%, becaus
 | File | Role |
 |---|---|
 | run.sh | builds the two configurations, runs `claude -p --output-format stream-json --verbose --include-hook-events`, and calls the parser |
-| parse_usage.py | extracts the token usage of each thread's first API request from stream-json (main thread has a null `parent_tool_use_id`, the subagent a non-null one) and from the session transcripts, then aggregates and renders the results |
+| parse_usage.py | extracts the token usage of each thread's first API request from stream-json (main thread has a null `parent_tool_use_id`, the subagent a non-null one) and from the session transcripts, flags runs that are not comparable, then aggregates and renders the results |
 | test_parse_usage.py | unit tests for the parser, the aggregation and the rendering on synthetic stream-json and run-summary fixtures |
-| results.json | numbers from the latest run, including per-run hook events, playbook load checks and init metadata |
+| results.json | numbers from the latest run, including per-run hook events, playbook load checks, deferred tool sets, validity, discarded attempts and init metadata |
 | results.md | tables rendered from results.json, with configuration notes and limitations |
 
 Run the tests with `python3 -m pytest eval/static-context/test_parse_usage.py -q`.
