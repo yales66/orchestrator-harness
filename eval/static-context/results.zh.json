@@ -7,58 +7,59 @@
   "groups": {
     "H": {
       "main_totals": [
-        20500,
-        20500
+        20497,
+        20497
       ],
       "subagent_totals": [
-        10112,
-        10112
+        10108,
+        10108
       ],
       "consistent": true,
+      "first_valid_run": 1,
       "runs": [
         {
           "variant": "H",
           "stream": {
             "main": {
               "input_tokens": 2,
-              "cache_creation_input_tokens": 10273,
+              "cache_creation_input_tokens": 10270,
               "cache_read_input_tokens": 10225,
-              "total": 20500,
+              "total": 20497,
               "model": "claude-opus-5-5",
-              "message_id": "msg_011CfYm4JsVVTaRZbLcr9pVo"
+              "message_id": "msg_011CfYoMBC5fU3zPPvvZywmD"
             },
             "subagent": {
               "input_tokens": 2,
-              "cache_creation_input_tokens": 4176,
+              "cache_creation_input_tokens": 4172,
               "cache_read_input_tokens": 5934,
-              "total": 10112,
+              "total": 10108,
               "model": "claude-opus-5-5",
-              "message_id": "msg_011CfYm4Z8yNPu4Pb51rpCK5",
-              "parent_tool_use_id": "toolu_01UHACfaNtdTLeUZZGkC2EZ8"
+              "message_id": "msg_011CfYoMTZL6EoAuvK5hvyzC",
+              "parent_tool_use_id": "toolu_017qDVyVc6T4Br8HHaZY7Y5J"
             }
           },
           "transcript": {
             "main": {
               "input_tokens": 2,
-              "cache_creation_input_tokens": 10273,
+              "cache_creation_input_tokens": 10270,
               "cache_read_input_tokens": 10225,
-              "total": 20500,
+              "total": 20497,
               "model": "claude-opus-5-5",
-              "message_id": "msg_011CfYm4JsVVTaRZbLcr9pVo"
+              "message_id": "msg_011CfYoMBC5fU3zPPvvZywmD"
             },
             "subagent": {
               "input_tokens": 2,
-              "cache_creation_input_tokens": 4176,
+              "cache_creation_input_tokens": 4172,
               "cache_read_input_tokens": 5934,
-              "total": 10112,
+              "total": 10108,
               "model": "claude-opus-5-5",
-              "message_id": "msg_011CfYm4Z8yNPu4Pb51rpCK5"
+              "message_id": "msg_011CfYoMTZL6EoAuvK5hvyzC"
             },
             "main_files": [
-              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-Jz9Ekx-H-1-cwd/9976a37c-0fde-48f3-87ac-845ab1d122ad.jsonl"
+              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-PqpgSr-H-1-cwd/0e6acd33-3569-405f-ba47-e41bf23d21d3.jsonl"
             ],
             "subagent_files": [
-              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-Jz9Ekx-H-1-cwd/9976a37c-0fde-48f3-87ac-845ab1d122ad/subagents/agent-a3f23e8fe366a99b6.jsonl"
+              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-PqpgSr-H-1-cwd/0e6acd33-3569-405f-ba47-e41bf23d21d3/subagents/agent-af7af855eeb4f9bb9.jsonl"
             ]
           },
           "hook_events": [
@@ -68,6 +69,34 @@
           ],
           "playbook_in_main_transcript": true,
           "playbook_in_subagent_transcript": false,
+          "deferred_tools": {
+            "main": [
+              "CronCreate",
+              "CronDelete",
+              "CronList",
+              "DesignSync",
+              "EnterWorktree",
+              "ExitWorktree",
+              "Monitor",
+              "NotebookEdit",
+              "PushNotification",
+              "RemoteTrigger",
+              "SendMessage",
+              "TaskStop",
+              "WebFetch",
+              "WebSearch"
+            ],
+            "subagent": [
+              "EnterWorktree",
+              "ExitWorktree",
+              "Monitor",
+              "NotebookEdit",
+              "SendMessage",
+              "TaskStop",
+              "WebFetch",
+              "WebSearch"
+            ]
+          },
           "claude_md_bytes": 2034,
           "init": {
             "claude_code_version": "2.1.285",
@@ -120,54 +149,57 @@
           },
           "result": {
             "is_error": false,
-            "result": "\u5b50\u4ee3\u7406\u8fd8\u5728\u8fd0\u884c\uff0c\u7b49\u5b83\u5b8c\u6210\u540e\u6211\u518d\u56de\u590d\u3002",
-            "total_cost_usd": 0.12924059999999998,
+            "result": "DONE",
+            "total_cost_usd": 0.1229588,
             "num_turns": 2
-          }
+          },
+          "discarded_attempts": 0,
+          "valid": true,
+          "invalid_reasons": []
         },
         {
           "variant": "H",
           "stream": {
             "main": {
               "input_tokens": 2,
-              "cache_creation_input_tokens": 10273,
+              "cache_creation_input_tokens": 10270,
               "cache_read_input_tokens": 10225,
-              "total": 20500,
+              "total": 20497,
               "model": "claude-opus-5-5",
-              "message_id": "msg_011CfYm5s32PM17eA1DJFSiA"
+              "message_id": "msg_011CfYoNkKRAKH4aKwFKLYhJ"
             },
             "subagent": {
               "input_tokens": 2,
-              "cache_creation_input_tokens": 4176,
+              "cache_creation_input_tokens": 4172,
               "cache_read_input_tokens": 5934,
-              "total": 10112,
+              "total": 10108,
               "model": "claude-opus-5-5",
-              "message_id": "msg_011CfYm6BLrqTrCJYiivBZ22",
-              "parent_tool_use_id": "toolu_015gfGCrVCbg9KKdi9ZJ3n5M"
+              "message_id": "msg_011CfYoNwoEgQwVJjDEL9n9L",
+              "parent_tool_use_id": "toolu_01L6Eei3axNxpnYaY6SJMtZK"
             }
           },
           "transcript": {
             "main": {
               "input_tokens": 2,
-              "cache_creation_input_tokens": 10273,
+              "cache_creation_input_tokens": 10270,
               "cache_read_input_tokens": 10225,
-              "total": 20500,
+              "total": 20497,
               "model": "claude-opus-5-5",
-              "message_id": "msg_011CfYm5s32PM17eA1DJFSiA"
+              "message_id": "msg_011CfYoNkKRAKH4aKwFKLYhJ"
             },
             "subagent": {
               "input_tokens": 2,
-              "cache_creation_input_tokens": 4176,
+              "cache_creation_input_tokens": 4172,
               "cache_read_input_tokens": 5934,
-              "total": 10112,
+              "total": 10108,
               "model": "claude-opus-5-5",
-              "message_id": "msg_011CfYm6BLrqTrCJYiivBZ22"
+              "message_id": "msg_011CfYoNwoEgQwVJjDEL9n9L"
             },
             "main_files": [
-              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-Jz9Ekx-H-2-cwd/79faae63-b116-49a9-9f6f-eed9ba367a44.jsonl"
+              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-PqpgSr-H-2-cwd/d21733c5-7301-4e54-9136-303e9eb80691.jsonl"
             ],
             "subagent_files": [
-              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-Jz9Ekx-H-2-cwd/79faae63-b116-49a9-9f6f-eed9ba367a44/subagents/agent-abbcadad3d8b84153.jsonl"
+              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-PqpgSr-H-2-cwd/d21733c5-7301-4e54-9136-303e9eb80691/subagents/agent-a837b46cedda5c8d9.jsonl"
             ]
           },
           "hook_events": [
@@ -177,6 +209,34 @@
           ],
           "playbook_in_main_transcript": true,
           "playbook_in_subagent_transcript": false,
+          "deferred_tools": {
+            "main": [
+              "CronCreate",
+              "CronDelete",
+              "CronList",
+              "DesignSync",
+              "EnterWorktree",
+              "ExitWorktree",
+              "Monitor",
+              "NotebookEdit",
+              "PushNotification",
+              "RemoteTrigger",
+              "SendMessage",
+              "TaskStop",
+              "WebFetch",
+              "WebSearch"
+            ],
+            "subagent": [
+              "EnterWorktree",
+              "ExitWorktree",
+              "Monitor",
+              "NotebookEdit",
+              "SendMessage",
+              "TaskStop",
+              "WebFetch",
+              "WebSearch"
+            ]
+          },
           "claude_md_bytes": 2034,
           "init": {
             "claude_code_version": "2.1.285",
@@ -229,67 +289,71 @@
           },
           "result": {
             "is_error": false,
-            "result": "\u5b50\u4ee3\u7406\u5df2\u5728\u540e\u53f0\u8fd0\u884c\uff0c\u7b49\u5b83\u8fd4\u56de\u7ed3\u679c\u540e\u6211\u518d\u6309\u8981\u6c42\u56de\u590d\u3002",
-            "total_cost_usd": 0.1232474,
+            "result": "\u5b50\u4ee3\u7406\u5df2\u5728\u540e\u53f0\u8fd0\u884c\uff0c\u5b8c\u6210\u540e\u6211\u4f1a\u6536\u5230\u901a\u77e5\uff0c\u5c4a\u65f6\u518d\u56de\u590d\u3002",
+            "total_cost_usd": 0.1306462,
             "num_turns": 2
-          }
+          },
+          "discarded_attempts": 0,
+          "valid": true,
+          "invalid_reasons": []
         }
       ]
     },
     "N": {
       "main_totals": [
-        20489,
-        20489
+        20486,
+        20486
       ],
       "subagent_totals": [
-        13670,
-        13670
+        13666,
+        13666
       ],
       "consistent": true,
+      "first_valid_run": 1,
       "runs": [
         {
           "variant": "N",
           "stream": {
             "main": {
               "input_tokens": 2,
-              "cache_creation_input_tokens": 10262,
+              "cache_creation_input_tokens": 10259,
               "cache_read_input_tokens": 10225,
-              "total": 20489,
+              "total": 20486,
               "model": "claude-opus-5-5",
-              "message_id": "msg_011CfYm53Q5yaorvZN4Za4vi"
+              "message_id": "msg_011CfYoMxiWeUS9G7bR5F4zX"
             },
             "subagent": {
               "input_tokens": 2,
-              "cache_creation_input_tokens": 7734,
+              "cache_creation_input_tokens": 7730,
               "cache_read_input_tokens": 5934,
-              "total": 13670,
+              "total": 13666,
               "model": "claude-opus-5-5",
-              "message_id": "msg_011CfYm5LjdgrbPFBhPia9mj",
-              "parent_tool_use_id": "toolu_01Gzz4omR6jZexG1kz8ALaiH"
+              "message_id": "msg_011CfYoNFFRqq3thTUZffd4j",
+              "parent_tool_use_id": "toolu_01LmtbkADJBY4KDoeuTkX3We"
             }
           },
           "transcript": {
             "main": {
               "input_tokens": 2,
-              "cache_creation_input_tokens": 10262,
+              "cache_creation_input_tokens": 10259,
               "cache_read_input_tokens": 10225,
-              "total": 20489,
+              "total": 20486,
               "model": "claude-opus-5-5",
-              "message_id": "msg_011CfYm53Q5yaorvZN4Za4vi"
+              "message_id": "msg_011CfYoMxiWeUS9G7bR5F4zX"
             },
             "subagent": {
               "input_tokens": 2,
-              "cache_creation_input_tokens": 7734,
+              "cache_creation_input_tokens": 7730,
               "cache_read_input_tokens": 5934,
-              "total": 13670,
+              "total": 13666,
               "model": "claude-opus-5-5",
-              "message_id": "msg_011CfYm5LjdgrbPFBhPia9mj"
+              "message_id": "msg_011CfYoNFFRqq3thTUZffd4j"
             },
             "main_files": [
-              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-Jz9Ekx-N-1-cwd/dceb51c5-0f2f-4efe-b013-4e7af2486540.jsonl"
+              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-PqpgSr-N-1-cwd/9c1bde54-4e17-4dfe-80af-cbd4e2831186.jsonl"
             ],
             "subagent_files": [
-              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-Jz9Ekx-N-1-cwd/dceb51c5-0f2f-4efe-b013-4e7af2486540/subagents/agent-a720fb8d211fcc382.jsonl"
+              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-PqpgSr-N-1-cwd/9c1bde54-4e17-4dfe-80af-cbd4e2831186/subagents/agent-a5f275205e361b57a.jsonl"
             ]
           },
           "hook_events": [
@@ -298,6 +362,34 @@
           ],
           "playbook_in_main_transcript": true,
           "playbook_in_subagent_transcript": true,
+          "deferred_tools": {
+            "main": [
+              "CronCreate",
+              "CronDelete",
+              "CronList",
+              "DesignSync",
+              "EnterWorktree",
+              "ExitWorktree",
+              "Monitor",
+              "NotebookEdit",
+              "PushNotification",
+              "RemoteTrigger",
+              "SendMessage",
+              "TaskStop",
+              "WebFetch",
+              "WebSearch"
+            ],
+            "subagent": [
+              "EnterWorktree",
+              "ExitWorktree",
+              "Monitor",
+              "NotebookEdit",
+              "SendMessage",
+              "TaskStop",
+              "WebFetch",
+              "WebSearch"
+            ]
+          },
           "claude_md_bytes": 11176,
           "init": {
             "claude_code_version": "2.1.285",
@@ -350,54 +442,57 @@
           },
           "result": {
             "is_error": false,
-            "result": "\u5b50\u4ee3\u7406\u5df2\u5728\u540e\u53f0\u542f\u52a8\uff0c\u8fd8\u6ca1\u8fd4\u56de\uff0c\u7b49\u5b8c\u6210\u901a\u77e5\u5230\u4e86\u6211\u518d\u56de\u590d\u3002",
-            "total_cost_usd": 0.14586980000000002,
+            "result": "\u5b50\u4ee3\u7406\u5df2\u6d3e\u51fa\uff0c\u8fd8\u5728\u540e\u53f0\u8fd0\u884c\uff0c\u7b49\u5b83\u8fd4\u56de\u540e\u6211\u518d\u56de\u590d\u3002",
+            "total_cost_usd": 0.145676,
             "num_turns": 2
-          }
+          },
+          "discarded_attempts": 0,
+          "valid": true,
+          "invalid_reasons": []
         },
         {
           "variant": "N",
           "stream": {
             "main": {
               "input_tokens": 2,
-              "cache_creation_input_tokens": 10262,
+              "cache_creation_input_tokens": 10259,
               "cache_read_input_tokens": 10225,
-              "total": 20489,
+              "total": 20486,
               "model": "claude-opus-5-5",
-              "message_id": "msg_011CfYm6nFL3LUg1kGJfsd3b"
+              "message_id": "msg_011CfYoPP1njWEqL1xKXFK3G"
             },
             "subagent": {
               "input_tokens": 2,
-              "cache_creation_input_tokens": 7734,
+              "cache_creation_input_tokens": 7730,
               "cache_read_input_tokens": 5934,
-              "total": 13670,
+              "total": 13666,
               "model": "claude-opus-5-5",
-              "message_id": "msg_011CfYm72hyvyJEfGaH71hnr",
-              "parent_tool_use_id": "toolu_017bCPAQyLMtfEUqzfpSrMPC"
+              "message_id": "msg_011CfYoPdWBFZYvhs49T1ntX",
+              "parent_tool_use_id": "toolu_01Ubo4uyGFthnPTX3AQinMYS"
             }
           },
           "transcript": {
             "main": {
               "input_tokens": 2,
-              "cache_creation_input_tokens": 10262,
+              "cache_creation_input_tokens": 10259,
               "cache_read_input_tokens": 10225,
-              "total": 20489,
+              "total": 20486,
               "model": "claude-opus-5-5",
-              "message_id": "msg_011CfYm6nFL3LUg1kGJfsd3b"
+              "message_id": "msg_011CfYoPP1njWEqL1xKXFK3G"
             },
             "subagent": {
               "input_tokens": 2,
-              "cache_creation_input_tokens": 7734,
+              "cache_creation_input_tokens": 7730,
               "cache_read_input_tokens": 5934,
-              "total": 13670,
+              "total": 13666,
               "model": "claude-opus-5-5",
-              "message_id": "msg_011CfYm72hyvyJEfGaH71hnr"
+              "message_id": "msg_011CfYoPdWBFZYvhs49T1ntX"
             },
             "main_files": [
-              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-Jz9Ekx-N-2-cwd/bd144334-b179-475f-9dcd-c03629de8714.jsonl"
+              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-PqpgSr-N-2-cwd/1d55d969-9965-4f97-b5c7-0df362ecf9c1.jsonl"
             ],
             "subagent_files": [
-              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-Jz9Ekx-N-2-cwd/bd144334-b179-475f-9dcd-c03629de8714/subagents/agent-a8ab587c7acbd78c4.jsonl"
+              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-PqpgSr-N-2-cwd/1d55d969-9965-4f97-b5c7-0df362ecf9c1/subagents/agent-a83b4d52a663759cc.jsonl"
             ]
           },
           "hook_events": [
@@ -406,6 +501,34 @@
           ],
           "playbook_in_main_transcript": true,
           "playbook_in_subagent_transcript": true,
+          "deferred_tools": {
+            "main": [
+              "CronCreate",
+              "CronDelete",
+              "CronList",
+              "DesignSync",
+              "EnterWorktree",
+              "ExitWorktree",
+              "Monitor",
+              "NotebookEdit",
+              "PushNotification",
+              "RemoteTrigger",
+              "SendMessage",
+              "TaskStop",
+              "WebFetch",
+              "WebSearch"
+            ],
+            "subagent": [
+              "EnterWorktree",
+              "ExitWorktree",
+              "Monitor",
+              "NotebookEdit",
+              "SendMessage",
+              "TaskStop",
+              "WebFetch",
+              "WebSearch"
+            ]
+          },
           "claude_md_bytes": 11176,
           "init": {
             "claude_code_version": "2.1.285",
@@ -458,15 +581,18 @@
           },
           "result": {
             "is_error": false,
-            "result": "\u5b50\u4efb\u52a1\u5df2\u6d3e\u51fa\uff0c\u6b63\u5728\u540e\u53f0\u8fd0\u884c\uff0c\u7b49\u5b83\u8fd4\u56de\u540e\u518d\u56de\u590d\u3002",
-            "total_cost_usd": 0.14627420000000002,
+            "result": "\u5b50\u4efb\u52a1\u8fd8\u5728\u540e\u53f0\u8fd0\u884c\uff0c\u5b8c\u6210\u540e\u6211\u4f1a\u56de\u590d DONE\u3002",
+            "total_cost_usd": 0.14727659999999998,
             "num_turns": 2
-          }
+          },
+          "discarded_attempts": 0,
+          "valid": true,
+          "invalid_reasons": []
         }
       ]
     }
   },
-  "deltas_first_repeat": {
+  "deltas_first_valid_run": {
     "N_minus_H": {
       "main": -11,
       "subagent": 3558

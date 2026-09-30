@@ -20,8 +20,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | `context-watermark-gate.sh` | Past 35% the gate reminds once per session, and its reminder no longer asks for a handoff. Its first block past 40% restates the weighing, and a second block after another 5-point rise asks for the handoff at once. Both scratchpad marks are cleared when usage falls back below 35%, as after compaction |
 | Hook regression tests | Cases for the single reminder, the reset below the reminder line and the wording of each block reason. The hook tests hold 494 cases per copy |
 | README and architecture diagrams | The design goals, the architecture section, the four diagrams and the hook table describe the new handoff timing, and "Two mechanisms worth a closer look" covers the playbook reaching only the main thread and the Stop gates handing control back to it |
-| Static context measurement | Rerun on the current playbooks with Claude Code 2.1.285 and claude-opus-5-5. Each subagent's first-request input is 10,188 tokens in H against 13,491 in N for the English copy, 3,303 fewer or about 24%, and 10,112 against 13,670 for the Chinese copy, 3,558 fewer or about 26% |
+| Static context measurement | Rerun on the current playbooks with Claude Code 2.1.285 and claude-opus-5-5. Each subagent's first-request input is 10,186 tokens in H against 13,489 in N for the English copy, 3,303 fewer or about 24%, and 10,108 against 13,666 for the Chinese copy, 3,558 fewer or about 26% |
 | English playbook | Reworded to 9,882 characters, below the 10,000 at which Claude Code passes only a preview of a SessionStart injection |
+
+### Fixed
+
+| Component | What changed |
+|---|---|
+| Static context measurement | The prompt passes the requested model's alias to the Agent call, since the installed playbook tells the main thread to pick a subagent model and some runs had dispatched it on haiku. `parse_usage.py check` marks a run whose subagent model or deferred tool set is not comparable, `run.sh` reruns it for up to `SC_RETRIES` rounds, and `results.md` reports each run's validity and discarded attempts |
 
 ## [0.3.0] - 2026-09-30
 

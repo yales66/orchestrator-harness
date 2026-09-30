@@ -11,7 +11,7 @@ Every claim on this page rests on deterministic evidence that a command in this 
 | The hooks behave as the README describes | nine test files with 494 cases per copy, all passing, run by CI on Ubuntu and macOS for both copies | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
 | `en/` and `zh/` are matching copies | the parity check compares the file lists and requires byte-identical hooks, tests and agents | `bash scripts/check-parity.sh` |
 | The playbook reaches only the main thread | the SessionStart test checks the injected text against the playbook byte for byte, and the static measurement finds the playbook in the main transcript and not in the subagent transcript of group H | `bash en/hooks/tests/orchestrator-playbook-session-start.test.sh` and `bash eval/static-context/run.sh` |
-| Keeping the playbook out of `CLAUDE.md` shrinks every subagent's first-request input | 10,188 tokens in H against 13,491 in N, 3,303 fewer or about 24% | `bash eval/static-context/run.sh` |
+| Keeping the playbook out of `CLAUDE.md` shrinks every subagent's first-request input | 10,186 tokens in H against 13,489 in N, 3,303 fewer or about 24% | `bash eval/static-context/run.sh` |
 | The hook tests catch defects they were not tuned to | 30 of 35 mutants written without reading the tests are killed | `HM_MANIFEST=eval/hook-mutations/holdout.tsv HM_OUT=eval/hook-mutations/holdout-results.md bash eval/hook-mutations/run.sh` |
 | The reply gate catches about a third of the closing offers it targets | precision 68.5% and recall 31.7% for the gate's closing-offer rule over 2,734 past replies | `python3 eval/reply-gate-replay/score.py --data "$DATA"` |
 
@@ -30,10 +30,10 @@ The script records the first-request input of the main thread and of a fresh gen
 
 | Group | Main thread, first-request input (tokens) | Subagent, first-request input (tokens) |
 |---|---|---|
-| H | 20,317 | 10,188 |
-| N | 20,306 | 13,491 |
+| H | 20,318 | 10,186 |
+| N | 20,307 | 13,489 |
 
-The placement decision shows up in the subagent column: keeping the playbook out of `CLAUDE.md` cuts each subagent's first-request input from 13,491 to 10,188 tokens, 3,303 fewer or about 24%. The full playbook reaches the main thread in both groups, whose first-request inputs differ by 11 tokens. In the second N run the subagent ran on claude-haiku-4-5-20251001 rather than claude-opus-5-5 and took 15,449 tokens, so the comparison uses the first run, and both H runs gave identical totals. The Chinese copy, measured with `SC_COPY=zh`, cuts the subagent's first-request input from 13,670 to 10,112 tokens, 3,558 fewer or about 26%, and both repeats of each group gave identical totals ([results.zh.md](../eval/static-context/results.zh.md)).
+The placement decision shows up in the subagent column: keeping the playbook out of `CLAUDE.md` cuts each subagent's first-request input from 13,489 to 10,186 tokens, 3,303 fewer or about 24%. The full playbook reaches the main thread in both groups, whose first-request inputs differ by 11 tokens. The script reruns any run whose subagent model or deferred tool set makes it not comparable, and both runs of each group gave identical totals. The Chinese copy, measured with `SC_COPY=zh`, cuts the subagent's first-request input from 13,666 to 10,108 tokens, 3,558 fewer or about 26%, and both repeats of each group gave identical totals ([results.zh.md](../eval/static-context/results.zh.md)).
 
 The runs used Claude Code 2.1.285, claude-opus-5-5 for both the main thread and the subagent, and one general-purpose subagent. Claude Code's own system prompt and tool definitions change from version to version, so the absolute numbers hold only for 2.1.285, and another version needs a rerun of the script. These figures cover only first-request input and do not represent the cost of a whole task, because later turns add tool results and conversation history on top. Token counts are not billed amounts either, since cache reads are charged at a discount on the base input price. The measurement cannot say whether a leaner subagent does better work. Per-run numbers, the split between cache writes and cache reads, and the checks that the playbook loaded where expected are in [eval/static-context/results.md](../eval/static-context/results.md).
 
