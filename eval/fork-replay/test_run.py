@@ -65,3 +65,81 @@ def test_temp_root_is_the_resolved_system_temp_dir():
     # The session copy is placed under the slug of the cwd, and Claude Code sees that cwd
     # with symlinks resolved, so the root must already be a real path.
     assert run.TMP_ROOT == os.path.realpath(tempfile.gettempdir())
+
+
+OLD_PLAYBOOK = "# 编排者 Playbook\n\nold rules\n"
+NEW_PLAYBOOK = "# 编排者 Playbook\n\nnew rules\n"
+INJECTED = [
+    {"uuid": "h0", "parentUuid": None, "type": "attachment",
+     "attachment": {"type": "hook_success", "hookEvent": "SessionStart",
+                    "stdout": json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart",
+                                                                 "additionalContext": OLD_PLAYBOOK}})}},
+    {"uuid": "h1", "parentUuid": "h0", "type": "attachment",
+     "attachment": {"type": "hook_additional_context", "hookEvent": "SessionStart",
+                    "content": [OLD_PLAYBOOK, "other context"]}},
+] + [dict(r, parentUuid=r["parentUuid"] or "h1") for r in RECORDS]
+
+
+def test_replace_playbook_swaps_every_injected_copy_and_nothing_else(tmp_path):
+    p = write_session(tmp_path, INJECTED)
+    assert run.replace_playbook(p, NEW_PLAYBOOK) == 2
+    recs = [json.loads(l) for l in open(p)]
+    assert recs[1]["attachment"]["content"] == [NEW_PLAYBOOK, "other context"]
+    out = json.loads(recs[0]["attachment"]["stdout"])["hookSpecificOutput"]["additionalContext"]
+    assert out == NEW_PLAYBOOK
+    assert OLD_PLAYBOOK not in open(p).read()
+    assert recs[2:] == [json.loads(json.dumps(r)) for r in INJECTED[2:]]
+
+
+def test_replace_playbook_refuses_a_session_without_a_playbook(tmp_path):
+    p = write_session(tmp_path, RECORDS)
+    with pytest.raises(ValueError):
+        run.replace_playbook(p, NEW_PLAYBOOK)
+
+
+def test_install_config_writes_the_playbook_under_test(tmp_path):
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "settings.json").write_text("{}")
+    (src / "orchestrator-playbook.md").write_text(OLD_PLAYBOOK)
+    dest = run.install_config(str(src), str(tmp_path / "cfg" / "config"), run.DEFAULT_CFG,
+                              str(tmp_path / "calls.jsonl"), playbook=NEW_PLAYBOOK)
+    assert (Path(dest) / "orchestrator-playbook.md").read_text() == NEW_PLAYBOOK
+
+
+def test_raw_bodies_dir_is_passed_to_claude_code(tmp_path):
+    env = run.child_env("/cfg", "/home", "claude-opus-5-5", str(tmp_path / "bodies"))
+    assert env["OTEL_LOG_RAW_API_BODIES"] == "file:" + str(tmp_path / "bodies")
+    assert "OTEL_LOG_RAW_API_BODIES" not in run.child_env("/cfg", "/home", "claude-opus-5-5", None)
+
+
+@pytest.mark.parametrize("path, want", [
+    ("/r/.claude/worktrees/fix-x", ("/r", "")),
+    ("/r/.claude/worktrees/fix-x/web", ("/r", "web")),
+], ids=["worktree-root", "worktree-subdir"])
+def test_removed_worktree_resolves_to_its_main_repository(path, want):
+    assert run.resolve_repo({"path": path, "commit": "c"}) == want
+
+
+def test_existing_repository_is_used_as_recorded(tmp_path):
+    assert run.resolve_repo({"path": str(tmp_path), "commit": "c", "subdir": "s"}) == (str(tmp_path), "s")
+
+
+def test_harness_approval_is_kept_per_variant(tmp_path):
+    before, after = tmp_path / "before.md", tmp_path / "after.md"
+    before.write_text("# 编排者 Playbook\n\nbefore\n")
+    after.write_text("# 编排者 Playbook\n\nafter\n")
+    cfg = tmp_path / "cfg.json"
+    cfg.write_text("{}")
+
+    def args(variant, playbook, approve=False):
+        return run.parse_args(["--cases", str(cfg), "--flow", str(tmp_path), "--config", str(REPO_EN),
+                               "--grader", str(cfg), "--eval-config", str(cfg), "--variant", variant,
+                               "--playbook", str(playbook)] + (["--approve-harness"] if approve else []))
+
+    run.check_harness(args("baseline", before, True), str(tmp_path))
+    run.check_harness(args("v1", after, True), str(tmp_path))
+    run.check_harness(args("baseline", before), str(tmp_path))
+    run.check_harness(args("v1", after), str(tmp_path))
+    with pytest.raises(SystemExit):
+        run.check_harness(args("v1", before), str(tmp_path))

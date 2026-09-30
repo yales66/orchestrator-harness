@@ -229,6 +229,12 @@ def grade_case(case, trajectory):
             "asked": int(asked), "forbidden": int(forbidden), "first_action": act and act.get("tool")}
 
 
+def grade(case, trajectory, cfg=None):
+    """Entry point for eval/fork-replay/run.py."""
+    g = grade_case(case, trajectory)
+    return {"grade": g, "first_action": g["first_action"]}
+
+
 def load_trajectory(path):
     with open(path, encoding="utf-8") as f:
         data = json.load(f)

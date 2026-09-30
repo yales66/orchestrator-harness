@@ -1,0 +1,17 @@
+{
+  "primary_metric": "pass_decisive",
+  "drop_hook_events": ["Stop"],
+  "stub": {
+    "extra_readonly": ["ToolSearch", "Skill", "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"],
+    "deny_reason": "PreToolUse hook：已记录，视同执行。"
+  },
+  "sdk": {
+    "rebuild_system_prompt": true,
+    "verbatim_prompts": true,
+    "setting_sources": ["user", "project", "local"],
+    "max_turns": 40,
+    "max_budget_usd": 3.0,
+    "permission_mode": "default"
+  },
+  "retry": {"attempts": 3, "base_s": 5.0}
+}

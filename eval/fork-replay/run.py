@@ -32,6 +32,7 @@ import json
 import math
 import os
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -73,12 +74,14 @@ def _merge(base, over):
     return out
 
 
-def install_config(src, dest, cfg, log_path):
+def install_config(src, dest, cfg, log_path, playbook=None):
     """Build a CLAUDE_CONFIG_DIR at dest from src and wire the stub hook into it.
 
     src is either a harness tree shaped like agent-harness en/ (it has
     settings.example.json; installed the way eval/static-context installs it) or a
-    ready configuration directory with its own settings.json.
+    ready configuration directory with its own settings.json. With playbook, that
+    text replaces orchestrator-playbook.md, so a SessionStart hook that fires again
+    during the replay injects the version under test.
     """
     os.makedirs(dest)
     if os.path.exists(os.path.join(src, "settings.example.json")):
@@ -107,6 +110,9 @@ def install_config(src, dest, cfg, log_path):
         "hooks": [{"type": "command", "command": f"python3 {STUB} {stub_cfg}", "timeout": 10}],
     })
     json.dump(settings, open(os.path.join(dest, "settings.json"), "w", encoding="utf-8"), indent=2)
+    if playbook is not None:
+        with open(os.path.join(dest, "orchestrator-playbook.md"), "w", encoding="utf-8") as f:
+            f.write(playbook)
     return dest
 
 
@@ -128,19 +134,38 @@ def prepare_cwd(case, root, unrestorable="empty"):
         cwd = os.path.join(root, "cwd")
         os.makedirs(cwd)
         return cwd, None
+    path, subdir = resolve_repo(repo)
     wt = os.path.join(root, "wt")
-    subprocess.run(["git", "-C", repo["path"], "worktree", "add", "--detach", wt, repo["commit"]],
+    subprocess.run(["git", "-C", path, "worktree", "add", "--detach", wt, repo["commit"]],
                    check=True, capture_output=True, text=True)
     # normpath: Claude Code names the project directory after the cwd without a
     # trailing slash, and the session copy must sit in exactly that directory.
-    cwd = os.path.normpath(os.path.join(wt, repo.get("subdir") or ""))
+    cwd = os.path.normpath(os.path.join(wt, subdir))
     os.makedirs(cwd, exist_ok=True)
     return cwd, wt
 
 
+WORKTREES = "/.claude/worktrees/"
+
+
+def resolve_repo(repo):
+    """(repository to check out from, subdirectory of the checkout to run in).
+
+    A session that ran in a Claude Code worktree since removed records a path under
+    <main>/.claude/worktrees/<name>; the commit is checked out from <main> instead,
+    and whatever followed <name> in the path becomes the subdirectory.
+    """
+    path, subdir = repo["path"], repo.get("subdir") or ""
+    if not os.path.isdir(path) and WORKTREES in path:
+        main, _, rest = path.partition(WORKTREES)
+        extra = rest.partition("/")[2]
+        return main, os.path.join(extra, subdir) if extra and subdir else (extra or subdir)
+    return path, subdir
+
+
 def remove_worktree(case, wt):
     if wt:
-        subprocess.run(["git", "-C", case["cwd_repo"]["path"], "worktree", "remove", "--force", wt],
+        subprocess.run(["git", "-C", resolve_repo(case["cwd_repo"])[0], "worktree", "remove", "--force", wt],
                        capture_output=True, text=True)
 
 
@@ -153,6 +178,50 @@ def place_session(case, cfgdir, cwd):
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     shutil.copy2(case["source_session"], dst)
     return dst
+
+
+PLAYBOOK_HEAD = re.compile(r"# [^\n]*Playbook\n")
+
+
+def replace_playbook(path, text):
+    """Swap every playbook the recorded SessionStart hook injected for text; return the count.
+
+    The injected playbook is replayed to the model from the transcript, not reloaded
+    from the configuration, so the session copy itself has to carry the version under
+    test. Both records are rewritten: the hook_additional_context the model reads and
+    the hook_success stdout it came from.
+    """
+    def swap(s):
+        return (text, 1) if isinstance(s, str) and PLAYBOOK_HEAD.match(s) else (s, 0)
+
+    out, n = [], 0
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            r = json.loads(line)
+            a = r.get("attachment") if isinstance(r.get("attachment"), dict) else {}
+            if a.get("hookEvent") == "SessionStart" and a.get("type") == "hook_additional_context":
+                swapped = [swap(c) for c in a.get("content") or []]
+                a["content"] = [c for c, _ in swapped]
+                n += sum(k for _, k in swapped)
+                line = json.dumps(r, ensure_ascii=False) + "\n"
+            elif a.get("hookEvent") == "SessionStart" and a.get("type") == "hook_success" and a.get("stdout"):
+                try:
+                    o = json.loads(a["stdout"])
+                except ValueError:
+                    o = None
+                hso = (o or {}).get("hookSpecificOutput") if isinstance(o, dict) else None
+                if isinstance(hso, dict):
+                    hso["additionalContext"], k = swap(hso.get("additionalContext"))
+                    if k:
+                        a["stdout"] = json.dumps(o)
+                        n += k
+                        line = json.dumps(r, ensure_ascii=False) + "\n"
+            out.append(line)
+    if n == 0:
+        raise ValueError(f"no injected playbook to replace in {path}")
+    with open(path, "w", encoding="utf-8") as f:
+        f.writelines(out)
+    return n
 
 
 def fork_plan(case):
@@ -249,14 +318,19 @@ def check_harness(args, flow):
     paths += [os.path.abspath(args.grader), os.path.abspath(args.eval_config),
               os.path.abspath(args.cases), os.path.abspath(args.config)]
     paths += [os.path.join(flow, p) for p in state.get("harness_paths", [])]
+    if args.playbook:
+        paths.append(os.path.abspath(args.playbook))
     sha = harness_fingerprint(paths)
+    # Kept per variant, because arms of one flow may differ in what they run under,
+    # such as the playbook, and each arm is approved on its own.
     rec = os.path.join(flow, "_harness.json")
+    approved = json.load(open(rec, encoding="utf-8")) if os.path.exists(rec) else {}
+    approved = approved.get("variants", {})
     if args.approve_harness:
-        json.dump({"sha": sha, "paths": sorted(paths), "approved_at": time.time()},
-                  open(rec, "w", encoding="utf-8"), indent=2)
+        approved[args.variant] = {"sha": sha, "paths": sorted(paths), "approved_at": time.time()}
+        json.dump({"variants": approved}, open(rec, "w", encoding="utf-8"), indent=2)
         return
-    old = json.load(open(rec, encoding="utf-8")).get("sha") if os.path.exists(rec) else None
-    if old != sha:
+    if approved.get(args.variant, {}).get("sha") != sha:
         print("harness fingerprint changed or never approved: review the runner, grader, eval config, "
               "cases and configuration under test, then rerun once with --approve-harness", file=sys.stderr)
         sys.exit(2)
@@ -264,11 +338,20 @@ def check_harness(args, flow):
 
 # ---------------------------------------------------------------- one attempt
 
-def build_options(case, cfg, args, cwd, cfgdir, home, resume_at, stderr_path):
+def child_env(cfgdir, home, model, raw_bodies=None):
+    env = {"CLAUDE_CONFIG_DIR": cfgdir, "HOME": home, "DISABLE_AUTOUPDATER": "1",
+           "CLAUDE_CODE_SUBAGENT_MODEL": model}
+    if raw_bodies:
+        # Claude Code writes each request body it sends into this directory, which is
+        # how a trial run checks what prefix the model actually saw.
+        env["OTEL_LOG_RAW_API_BODIES"] = "file:" + raw_bodies
+    return env
+
+
+def build_options(case, cfg, args, cwd, cfgdir, home, resume_at, stderr_path, raw_bodies=None):
     from claude_agent_sdk import ClaudeAgentOptions
     sdk = cfg["sdk"]
-    env = {"CLAUDE_CONFIG_DIR": cfgdir, "HOME": home, "DISABLE_AUTOUPDATER": "1",
-           "CLAUDE_CODE_SUBAGENT_MODEL": args.model}
+    env = child_env(cfgdir, home, args.model, raw_bodies)
     err = open(stderr_path, "a", encoding="utf-8")
     kw = dict(
         cwd=cwd,
@@ -303,17 +386,21 @@ async def attempt(case, rep, cfg, args):
     try:
         cwd, wt = prepare_cwd(case, root, args.unrestorable_cwd)
         log = os.path.join(root, "calls.jsonl")
-        cfgdir = install_config(args.config, os.path.join(root, "config"), cfg, log)
+        playbook = open(args.playbook, encoding="utf-8").read() if args.playbook else None
+        cfgdir = install_config(args.config, os.path.join(root, "config"), cfg, log, playbook)
         home = os.path.join(root, "home")
         os.makedirs(home)
         placed = place_session(case, cfgdir, cwd)
+        replaced = replace_playbook(placed, playbook) if playbook is not None else 0
         resume_at, prompt, rewound = fork_plan(case)
         if args.dry_run:
             return {"dry_run": True, "cwd": cwd, "worktree": wt, "session": placed,
                     "resume_session_at": resume_at, "rewound_assistant_records": rewound,
+                    "playbooks_replaced": replaced,
                     "prompt_head": prompt[:120], "settings": json.load(open(os.path.join(cfgdir, "settings.json")))}
         from claude_agent_sdk import query
-        opts = build_options(case, cfg, args, cwd, cfgdir, home, resume_at, os.path.join(root, "stderr.log"))
+        raw = os.path.join(os.path.abspath(args.raw_bodies), f"{case['id']}_rep{rep}") if args.raw_bodies else None
+        opts = build_options(case, cfg, args, cwd, cfgdir, home, resume_at, os.path.join(root, "stderr.log"), raw)
         t0, messages = time.monotonic(), []
         async for m in query(prompt=prompt, options=opts):
             messages.append(m)
@@ -476,6 +563,9 @@ def parse_args(argv=None):
     ap.add_argument("--keep", action="store_true", help="keep each attempt's temp directory")
     ap.add_argument("--unrestorable-cwd", choices=("empty", "origin"), default="empty",
                     help="where a case without a restorable repository runs: an empty temp dir, or its original directory as it is today")
+    ap.add_argument("--playbook",
+                    help="orchestrator playbook under test: replaces the playbook injected into every session copy and the config's copy")
+    ap.add_argument("--raw-bodies", help="directory for the raw API request bodies of each attempt, to check the prefix the model saw")
     ap.add_argument("--approve-harness", action="store_true",
                     help="record the current harness fingerprint as approved (the user's call, not the agent's)")
     args = ap.parse_args(argv)
