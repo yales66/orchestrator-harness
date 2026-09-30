@@ -3,7 +3,7 @@
   "drop_hook_events": ["Stop"],
   "stub": {
     "extra_readonly": ["ToolSearch", "Skill", "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"],
-    "deny_reason": "Blocked by PreToolUse hook: this tool call was not run and nothing was changed."
+    "deny_reason": "PreToolUse hook：已记录，视同执行。"
   },
   "ask_tools": ["AskUserQuestion", "ExitPlanMode"],
   "sdk": {
