@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # macOS runs the hooks under the system bash 3.2 that Claude Code users on a Mac have
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hook tests (en and zh)
+        run: |
+          status=0
+          for t in en/hooks/tests/*.test.sh zh/hooks/tests/*.test.sh; do
+            echo "::group::$t"
+            bash "$t" || { echo "::error file=$t::$t failed"; status=1; }
+            echo "::endgroup::"
+          done
+          exit "$status"
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint hook scripts, hook tests and repository scripts
+        run: |
+          shellcheck --version
+          shellcheck --severity=warning \
+            scripts/*.sh en/hooks/*.sh zh/hooks/*.sh \
+            en/hooks/tests/*.sh zh/hooks/tests/*.sh
+
+  parity:
+    name: en/zh parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check that en/ and zh/ are matching copies
+        run: bash scripts/check-parity.sh

@@ -1,0 +1,58 @@
+# Hook mutation manifest. Tab-separated; lines starting with # are comments.
+# Columns: id, hook file under en/hooks, anchor (exact text, must occur exactly once),
+# replacement (literal, may be empty), rule the mutant breaks (from the hook's header comment).
+id	hook	anchor	replacement	rule
+BN1	block-nested-subagent.sh	if not isinstance(payload, dict) or not str(payload.get("agent_id") or "").strip():	if not isinstance(payload, dict) or str(payload.get("agent_id") or "").strip():	deny when agent_id is present, allow when absent
+BN2	block-nested-subagent.sh	payload.get("agent_id")	payload.get("agent_type")	judge by agent_id, not agent_type (--agent main thread carries only agent_type)
+BN3	block-nested-subagent.sh	"permissionDecision": "deny",	"permissionDecision": "allow",	a subagent spawning a subagent is denied
+BN4	block-nested-subagent.sh	    sys.exit(0)                      # 输入异常一律放行，hook 不该卡死会话	    payload = {"agent_id": "unparsed"}	malformed input is allowed
+NV1	block-no-verify-commit.sh	if a in ("--no-verify", "-n"): return True	if a in ("--no-verify",): return True	git commit -n is blocked like --no-verify
+NV2	block-no-verify-commit.sh	GIT_VALUED = {"-C", "-c", 	GIT_VALUED = {"-c", 	git global options with a value (-C path) are skipped to find the subcommand
+NV3	block-no-verify-commit.sh	COMMIT_VALUED = {"-m", "--message", 	COMMIT_VALUED = {"--message", 	the value of commit -m is not read as an option
+NV4	block-no-verify-commit.sh	if i >= len(toks) or toks[i] != "commit":	if i >= len(toks):	only the commit subcommand is checked
+NV5	block-no-verify-commit.sh	re.split(r"(?:&&|\|\||[;&|\n])", flat)	re.split(r"(?:&&|\|\||[&|])", flat)	the command is split into subcommands at ; and newlines
+NV6	block-no-verify-commit.sh	flat = cmd.replace("$(", " ").replace("`", " ").replace(")", " ")	flat = cmd	git inside a command substitution is still seen
+CW1	context-watermark-gate.sh	(u.get("cache_read_input_tokens") or 0) + \	0 + \	usage sums cache_read_input_tokens
+CW2	context-watermark-gate.sh	(u.get("cache_creation_input_tokens") or 0)	0	usage sums cache_creation_input_tokens
+CW3	context-watermark-gate.sh	if pct < WARN:	if pct <= WARN:	exactly the warn line warns
+CW4	context-watermark-gate.sh	HARD = float(os.environ.get("CONTEXT_HARD_PCT") or 40)	HARD = float(os.environ.get("CONTEXT_HARD_PCT") or 44)	the default hard line is 40%
+CW5	context-watermark-gate.sh	if p.get("stop_hook_active"):	if False:	stop_hook_active true means allow, to avoid a loop
+CW6	context-watermark-gate.sh	if str(p.get("agent_id") or "").strip():	if False:	inside a subagent (agent_id present) always allow
+CW7	context-watermark-gate.sh	REDELTA = float(os.environ.get("CONTEXT_REBLOCK_DELTA_PCT") or 5)	REDELTA = float(os.environ.get("CONTEXT_REBLOCK_DELTA_PCT") or 1)	after a block, block again only after a further 5 points
+OP1	orchestrator-playbook-session-start.sh	PLAYBOOK="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/orchestrator-playbook.md"	PLAYBOOK="$HOME/.claude/orchestrator-playbook.md"	the playbook is found next to hooks/, relative to the script
+OP2	orchestrator-playbook-session-start.sh	"hookEventName": "SessionStart",	"hookEventName": "Setup",	output is a SessionStart additionalContext
+OP3	orchestrator-playbook-session-start.sh	"additionalContext": content,	"additionalContext": content.strip(),	the playbook is injected verbatim, not restated
+RG1	reply-gate.sh	需要我|要我|要不要|是否需要	需要我|要我|是否需要	A1: 要不要 is an offer phrase
+RG2	reply-gate.sh	shall i|should i|want me to	shall i|want me to	A1: should I is an offer phrase
+RG3	reply-gate.sh	last = re.split(r"[。！？!?；;\n]|(?<=\.)\s", body)[-1]	last = body	A1: only the last sentence of the last paragraph counts
+RG4	reply-gate.sh	if not tail or tail[-1] not in "？?吗":	if not tail:	A1: the reply must end in a question
+RG5	reply-gate.sh	if not isinstance(p, dict) or p.get("stop_hook_active"):	if not isinstance(p, dict):	stop_hook_active true means allow, to avoid a loop
+RG6	reply-gate.sh	if os.environ.get("REPLY_LANG") != "zh":	if False:	A2: language check only when REPLY_LANG=zh
+RG7	reply-gate.sh	if len(re.sub(r"\s", "", t)) <= 150:	if len(re.sub(r"\s", "", t)) <= 30:	A2: replies of 150 visible characters or fewer are not checked
+RF1	rule-file-edit-check.sh	*/CLAUDE.md|*/CLAUDE.local.md|*/AGENTS.md	*/CLAUDE.md|*/AGENTS.md	CLAUDE.local.md is a rule file
+RF2	rule-file-edit-check.sh	|*/.claude/agents/*.md|	|	.claude/agents/*.md is a rule file
+RF3	rule-file-edit-check.sh	  */CLAUDE.md|*/CLAUDE.local.md	  *CLAUDE.md|*/CLAUDE.local.md	only a file named exactly CLAUDE.md matches
+RF4	rule-file-edit-check.sh	*/.claude/commands/*.md|	*/.claude/commands/*|	only .md files under .claude/commands match
+SG1	secret-guard.sh	SAMPLES = {".env.example", ".env.sample", ".env.template"}	SAMPLES = {".env.example", ".env.sample"}	Read: .env.template is a sample and is allowed
+SG2	secret-guard.sh	name = os.path.basename(str(path)).lower()	name = os.path.basename(str(path))	file names compare case-insensitively (.ENV is .env)
+SG3	secret-guard.sh	(a.startswith("-") and not a.startswith("--") and "i" in a) for a in args)):	False for a in args)):	only non-in-place sed counts as a reader (sed -i does not print)
+SG4	secret-guard.sh	safe_short = "cql" if rg else "cqlL"	safe_short = "cql"	grep -L only reports file names and is allowed
+SG5	secret-guard.sh	if ch in "ef":	if ch in "f":	grep -e supplies the pattern, so every positional is a file
+SG6	secret-guard.sh	VAR = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")	VAR = re.compile(r"\$\{?#?([A-Za-z_][A-Za-z0-9_]*)")	${#VAR} gives only the length and is not an expansion
+SG7	secret-guard.sh	inner = re.findall(r"\$\(([^()]*)\)", cmd) + re.findall(r"`([^`]*)`", cmd)	inner = []	command substitutions, also inside double quotes, are checked
+SR1	subagent-readonly-guard.sh	if p.get("agent_type") != "researcher" or not str(p.get("agent_id") or "").strip():	if not str(p.get("agent_id") or "").strip():	only the researcher agent type is restricted
+SR2	subagent-readonly-guard.sh	if p.get("agent_type") != "researcher" or not str(p.get("agent_id") or "").strip():	if p.get("agent_type") != "researcher":	agent_id must be present (--agent researcher main thread is not restricted)
+SR3	subagent-readonly-guard.sh	if isinstance(fp, str) and fp.strip() and exists(fp):	if isinstance(fp, str) and fp.strip():	Write is denied only when the target exists
+SR4	subagent-readonly-guard.sh	    return None if cwd is None else os.path.join(cwd, path)	    return path	relative paths resolve against the input cwd
+SR5	subagent-readonly-guard.sh	DEVICES = {"/dev/null", "/dev/stdout"	DEVICES = {"/dev/stdout"	redirecting to /dev/null is allowed
+SR6	subagent-readonly-guard.sh	("d" in a or "D" in a)	"d" in a	git branch -D is denied
+SR7	subagent-readonly-guard.sh	return short_has(rest, "f") or "--force" in rest	return short_has(rest, "f")	ln --force is denied like ln -f
+SR8	subagent-readonly-guard.sh	if a.startswith("--target-directory="):	if False:	cp into an existing target is denied, including --target-directory=DIR
+WT1	worktree-symlink-claudemd.sh	*.example|*.sample|*.schema|*.template) continue ;;	*.example|*.sample|*.template) continue ;;	.env.schema is a template and is not linked
+WT2	worktree-symlink-claudemd.sh	[ -L "$dest" ] && return 0	:	already-symlinked targets are left alone (idempotent)
+WT3	worktree-symlink-claudemd.sh	if [ -e "$dest" ] && [ "$skip_worktree" != "true" ]; then	if false; then	real files and directories in the worktree are never overwritten
+WT4	worktree-symlink-claudemd.sh	      || [ "$head_blob" != "$(git -C "$worktree" hash-object -- "$name" 2>/dev/null)" ]; then	      ; then	a worktree CLAUDE.md that differs from HEAD is kept
+WT5	worktree-symlink-claudemd.sh	(cd "$worktree" && git update-index --skip-worktree "$name" 2>/dev/null || true)	true	the tracked CLAUDE.md is flagged skip-worktree
+WT6	worktree-symlink-claudemd.sh	worktree=$(cd "$worktree" 2>/dev/null && pwd -P) || exit 0	worktree=$(cd "$worktree" 2>/dev/null && pwd) || exit 0	paths are resolved physically before computing the link
+WT7	worktree-symlink-claudemd.sh	[ "$main" = "$worktree" ] && exit 0	:	the main worktree itself is never modified
+WT8	worktree-symlink-claudemd.sh	[ -e "$worktree/$rel" ] || [ -L "$worktree/$rel" ] || return 0	:	the link text must resolve from the worktree, otherwise keep the file

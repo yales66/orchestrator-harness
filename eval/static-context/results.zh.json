@@ -1,0 +1,475 @@
+{
+  "copy": "zh",
+  "claude_code_version": "2.1.285",
+  "model": "claude-opus-5-5",
+  "date_utc": "2026-09-30",
+  "repeats": 2,
+  "groups": {
+    "H": {
+      "main_totals": [
+        20467,
+        20467
+      ],
+      "subagent_totals": [
+        11371,
+        10108
+      ],
+      "consistent": false,
+      "runs": [
+        {
+          "variant": "H",
+          "stream": {
+            "main": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 10240,
+              "cache_read_input_tokens": 10225,
+              "total": 20467,
+              "model": "claude-opus-5-5",
+              "message_id": "msg_011CfYeZwoysWbrRURfWRYsY"
+            },
+            "subagent": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 11369,
+              "cache_read_input_tokens": 0,
+              "total": 11371,
+              "model": "claude-opus-5-5",
+              "message_id": "msg_011CfYeaHdbBrE8XabASQnvo",
+              "parent_tool_use_id": "toolu_017R54JZnccxtbis6d6SjCoQ"
+            }
+          },
+          "transcript": {
+            "main": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 10240,
+              "cache_read_input_tokens": 10225,
+              "total": 20467,
+              "model": "claude-opus-5-5",
+              "message_id": "msg_011CfYeZwoysWbrRURfWRYsY"
+            },
+            "subagent": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 11369,
+              "cache_read_input_tokens": 0,
+              "total": 11371,
+              "model": "claude-opus-5-5",
+              "message_id": "msg_011CfYeaHdbBrE8XabASQnvo"
+            },
+            "main_files": [
+              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-YIZuAs-H-1-cwd/b080f08f-8988-4aea-a094-04c5f6fcde7a.jsonl"
+            ],
+            "subagent_files": [
+              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-YIZuAs-H-1-cwd/b080f08f-8988-4aea-a094-04c5f6fcde7a/subagents/agent-a8562e71244da5e02.jsonl"
+            ]
+          },
+          "hook_events": [
+            "SessionStart",
+            "PreToolUse",
+            "Stop"
+          ],
+          "playbook_in_main_transcript": true,
+          "playbook_in_subagent_transcript": false,
+          "claude_md_bytes": 2034,
+          "init": {
+            "claude_code_version": "2.1.285",
+            "model": "claude-opus-5-5",
+            "apiKeySource": "none",
+            "skills": [
+              "memory-audit",
+              "rule-file-editing",
+              "deep-research",
+              "design",
+              "design-sync",
+              "dataviz",
+              "update-config",
+              "verify",
+              "debug",
+              "code-review",
+              "simplify",
+              "batch",
+              "fewer-permission-prompts",
+              "doctor",
+              "loop",
+              "schedule",
+              "claude-api",
+              "workflow-authoring",
+              "run",
+              "run-skill-generator"
+            ],
+            "plugins": [
+              {
+                "name": "cc-plugin-agents-md",
+                "path": "builtin",
+                "source": "cc-plugin-agents-md@builtin"
+              },
+              {
+                "name": "cc-plugin-telemetry",
+                "path": "builtin",
+                "source": "cc-plugin-telemetry@builtin"
+              }
+            ],
+            "mcp_servers": [],
+            "agents": [
+              "claude",
+              "Explore",
+              "general-purpose",
+              "Plan",
+              "researcher",
+              "statusline-setup"
+            ],
+            "tool_count": 25
+          },
+          "result": {
+            "is_error": false,
+            "result": "DONE",
+            "total_cost_usd": 0.158559,
+            "num_turns": 2
+          }
+        },
+        {
+          "variant": "H",
+          "stream": {
+            "main": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 10240,
+              "cache_read_input_tokens": 10225,
+              "total": 20467,
+              "model": "claude-opus-5-5",
+              "message_id": "msg_011CfYebRG1BSFnEv4AAMJoB"
+            },
+            "subagent": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 4172,
+              "cache_read_input_tokens": 5934,
+              "total": 10108,
+              "model": "claude-opus-5-5",
+              "message_id": "msg_011CfYebiV6sm2C5FxDJdAf9",
+              "parent_tool_use_id": "toolu_014NhBwpbgtS3bgW37sKdbPN"
+            }
+          },
+          "transcript": {
+            "main": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 10240,
+              "cache_read_input_tokens": 10225,
+              "total": 20467,
+              "model": "claude-opus-5-5",
+              "message_id": "msg_011CfYebRG1BSFnEv4AAMJoB"
+            },
+            "subagent": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 4172,
+              "cache_read_input_tokens": 5934,
+              "total": 10108,
+              "model": "claude-opus-5-5",
+              "message_id": "msg_011CfYebiV6sm2C5FxDJdAf9"
+            },
+            "main_files": [
+              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-YIZuAs-H-2-cwd/0952561f-af07-47d5-819c-661597e9dc14.jsonl"
+            ],
+            "subagent_files": [
+              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-YIZuAs-H-2-cwd/0952561f-af07-47d5-819c-661597e9dc14/subagents/agent-a49a089c6c2fa28b4.jsonl"
+            ]
+          },
+          "hook_events": [
+            "SessionStart",
+            "PreToolUse",
+            "Stop"
+          ],
+          "playbook_in_main_transcript": true,
+          "playbook_in_subagent_transcript": false,
+          "claude_md_bytes": 2034,
+          "init": {
+            "claude_code_version": "2.1.285",
+            "model": "claude-opus-5-5",
+            "apiKeySource": "none",
+            "skills": [
+              "memory-audit",
+              "rule-file-editing",
+              "deep-research",
+              "design",
+              "design-sync",
+              "dataviz",
+              "update-config",
+              "verify",
+              "debug",
+              "code-review",
+              "simplify",
+              "batch",
+              "fewer-permission-prompts",
+              "doctor",
+              "loop",
+              "schedule",
+              "claude-api",
+              "workflow-authoring",
+              "run",
+              "run-skill-generator"
+            ],
+            "plugins": [
+              {
+                "name": "cc-plugin-agents-md",
+                "path": "builtin",
+                "source": "cc-plugin-agents-md@builtin"
+              },
+              {
+                "name": "cc-plugin-telemetry",
+                "path": "builtin",
+                "source": "cc-plugin-telemetry@builtin"
+              }
+            ],
+            "mcp_servers": [],
+            "agents": [
+              "claude",
+              "Explore",
+              "general-purpose",
+              "Plan",
+              "researcher",
+              "statusline-setup"
+            ],
+            "tool_count": 25
+          },
+          "result": {
+            "is_error": false,
+            "result": "\u4ee3\u7406\u5df2\u5728\u540e\u53f0\u542f\u52a8\uff0c\u8fd8\u6ca1\u6709\u8fd4\u56de\u7ed3\u679c\uff0c\u7b49\u5b83\u5b8c\u6210\u540e\u6211\u518d\u56de\u590d\u3002",
+            "total_cost_usd": 0.1295976,
+            "num_turns": 2
+          }
+        }
+      ]
+    },
+    "N": {
+      "main_totals": [
+        20456,
+        20456
+      ],
+      "subagent_totals": [
+        13641,
+        13641
+      ],
+      "consistent": true,
+      "runs": [
+        {
+          "variant": "N",
+          "stream": {
+            "main": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 10229,
+              "cache_read_input_tokens": 10225,
+              "total": 20456,
+              "model": "claude-opus-5-5",
+              "message_id": "msg_011CfYeagkPfFLhWZFXDcwiG"
+            },
+            "subagent": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 7705,
+              "cache_read_input_tokens": 5934,
+              "total": 13641,
+              "model": "claude-opus-5-5",
+              "message_id": "msg_011CfYeawPhgabHaLhZCVksC",
+              "parent_tool_use_id": "toolu_013d91qQXmjt41uqx8VTjw2T"
+            }
+          },
+          "transcript": {
+            "main": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 10229,
+              "cache_read_input_tokens": 10225,
+              "total": 20456,
+              "model": "claude-opus-5-5",
+              "message_id": "msg_011CfYeagkPfFLhWZFXDcwiG"
+            },
+            "subagent": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 7705,
+              "cache_read_input_tokens": 5934,
+              "total": 13641,
+              "model": "claude-opus-5-5",
+              "message_id": "msg_011CfYeawPhgabHaLhZCVksC"
+            },
+            "main_files": [
+              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-YIZuAs-N-1-cwd/476b2d4e-ba76-4023-b6d1-6e78343cb7a6.jsonl"
+            ],
+            "subagent_files": [
+              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-YIZuAs-N-1-cwd/476b2d4e-ba76-4023-b6d1-6e78343cb7a6/subagents/agent-a6dcc7e12f31d0519.jsonl"
+            ]
+          },
+          "hook_events": [
+            "PreToolUse",
+            "Stop"
+          ],
+          "playbook_in_main_transcript": true,
+          "playbook_in_subagent_transcript": true,
+          "claude_md_bytes": 11084,
+          "init": {
+            "claude_code_version": "2.1.285",
+            "model": "claude-opus-5-5",
+            "apiKeySource": "none",
+            "skills": [
+              "memory-audit",
+              "rule-file-editing",
+              "deep-research",
+              "design",
+              "design-sync",
+              "dataviz",
+              "update-config",
+              "verify",
+              "debug",
+              "code-review",
+              "simplify",
+              "batch",
+              "fewer-permission-prompts",
+              "doctor",
+              "loop",
+              "schedule",
+              "claude-api",
+              "workflow-authoring",
+              "run",
+              "run-skill-generator"
+            ],
+            "plugins": [
+              {
+                "name": "cc-plugin-agents-md",
+                "path": "builtin",
+                "source": "cc-plugin-agents-md@builtin"
+              },
+              {
+                "name": "cc-plugin-telemetry",
+                "path": "builtin",
+                "source": "cc-plugin-telemetry@builtin"
+              }
+            ],
+            "mcp_servers": [],
+            "agents": [
+              "claude",
+              "Explore",
+              "general-purpose",
+              "Plan",
+              "researcher",
+              "statusline-setup"
+            ],
+            "tool_count": 25
+          },
+          "result": {
+            "is_error": false,
+            "result": "\u5b50\u4efb\u52a1\u5df2\u5728\u540e\u53f0\u542f\u52a8\uff0c\u8fd8\u5728\u8fd0\u884c\uff0c\u7ed3\u679c\u56de\u6765\u540e\u6211\u518d\u56de\u590d\u3002",
+            "total_cost_usd": 0.14515280000000003,
+            "num_turns": 2
+          }
+        },
+        {
+          "variant": "N",
+          "stream": {
+            "main": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 10229,
+              "cache_read_input_tokens": 10225,
+              "total": 20456,
+              "model": "claude-opus-5-5",
+              "message_id": "msg_011CfYecCQ8b5yd5e1fKZNGg"
+            },
+            "subagent": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 7705,
+              "cache_read_input_tokens": 5934,
+              "total": 13641,
+              "model": "claude-opus-5-5",
+              "message_id": "msg_011CfYecSWSvG2sjtGCzj3kX",
+              "parent_tool_use_id": "toolu_0136S6AJWjNn1c3fcmfF8F1D"
+            }
+          },
+          "transcript": {
+            "main": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 10229,
+              "cache_read_input_tokens": 10225,
+              "total": 20456,
+              "model": "claude-opus-5-5",
+              "message_id": "msg_011CfYecCQ8b5yd5e1fKZNGg"
+            },
+            "subagent": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 7705,
+              "cache_read_input_tokens": 5934,
+              "total": 13641,
+              "model": "claude-opus-5-5",
+              "message_id": "msg_011CfYecSWSvG2sjtGCzj3kX"
+            },
+            "main_files": [
+              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-YIZuAs-N-2-cwd/3b14a281-80b5-4c22-8ede-1068a3e0119b.jsonl"
+            ],
+            "subagent_files": [
+              "config/projects/-private-var-folders-q8-yg2j5dhn2slgrn6whb-24k6r0000gn-T-static-context-YIZuAs-N-2-cwd/3b14a281-80b5-4c22-8ede-1068a3e0119b/subagents/agent-af9eeebf0f49a9d65.jsonl"
+            ]
+          },
+          "hook_events": [
+            "PreToolUse",
+            "Stop"
+          ],
+          "playbook_in_main_transcript": true,
+          "playbook_in_subagent_transcript": true,
+          "claude_md_bytes": 11084,
+          "init": {
+            "claude_code_version": "2.1.285",
+            "model": "claude-opus-5-5",
+            "apiKeySource": "none",
+            "skills": [
+              "memory-audit",
+              "rule-file-editing",
+              "deep-research",
+              "design",
+              "design-sync",
+              "dataviz",
+              "update-config",
+              "verify",
+              "debug",
+              "code-review",
+              "simplify",
+              "batch",
+              "fewer-permission-prompts",
+              "doctor",
+              "loop",
+              "schedule",
+              "claude-api",
+              "workflow-authoring",
+              "run",
+              "run-skill-generator"
+            ],
+            "plugins": [
+              {
+                "name": "cc-plugin-agents-md",
+                "path": "builtin",
+                "source": "cc-plugin-agents-md@builtin"
+              },
+              {
+                "name": "cc-plugin-telemetry",
+                "path": "builtin",
+                "source": "cc-plugin-telemetry@builtin"
+              }
+            ],
+            "mcp_servers": [],
+            "agents": [
+              "claude",
+              "Explore",
+              "general-purpose",
+              "Plan",
+              "researcher",
+              "statusline-setup"
+            ],
+            "tool_count": 25
+          },
+          "result": {
+            "is_error": false,
+            "result": "\u5b50\u4ee3\u7406\u5df2\u5728\u540e\u53f0\u8fd0\u884c\uff0c\u7b49\u5b83\u8fd4\u56de\u540e\u6211\u518d\u56de\u590d\u3002",
+            "total_cost_usd": 0.1467604,
+            "num_turns": 2
+          }
+        }
+      ]
+    }
+  },
+  "deltas_first_repeat": {
+    "N_minus_H": {
+      "main": -11,
+      "subagent": 2270
+    }
+  }
+}

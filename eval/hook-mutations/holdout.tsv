@@ -1,0 +1,41 @@
+# Held-out hook mutants, written from the hook header comments without reading the
+# regression tests, mutations.tsv or results.md, so the score estimates how well the
+# tests pin the stated rules on defects they were not strengthened against. Run with
+# HM_MANIFEST=eval/hook-mutations/holdout.tsv HM_OUT=eval/hook-mutations/holdout-results.md
+# Same five columns as mutations.tsv. No row is suspected of being equivalent.
+id	hook	anchor	replacement	rule
+H-SG1	secret-guard.sh	name = os.path.basename(str(path)).lower()	name = os.path.basename(str(path))	Read: the file name is compared in lower case, so .ENV is denied like .env
+H-SG2	secret-guard.sh	VAR = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")	VAR = re.compile(r"\$\{?#?([A-Za-z_][A-Za-z0-9_]*)")	echo/printf: ${#VAR} only gives the length and is not an expansion of a secret variable
+H-SG3	secret-guard.sh	if d == "-" or "$" in d or "`" in d or d.startswith("+"):	if "$" in d or "`" in d or d.startswith("+"):	search root: after `cd -` the root cannot be determined and counts as containing .env
+H-SG4	secret-guard.sh	safe_short = "cql" if rg else "cqlL"	safe_short = "cqlL"	rg -L follows symlinks and still prints matches; only grep's -L is a names-only option
+H-SG5	secret-guard.sh	inner = re.findall(r"\$\(([^()]*)\)", cmd) + re.findall(r"`([^`]*)`", cmd)	inner = re.findall(r"`([^`]*)`", cmd)	a command substitution $(...) inside double quotes is split out and judged like any other segment
+H-SR1	subagent-readonly-guard.sh	a.startswith("-") and not a.startswith("--") and ("d" in a or "D" in a) for a in sargs)	a.startswith("-") and not a.startswith("--") and ("d" in a) for a in sargs)	git branch -D (force delete) is denied like git branch -d
+H-SR2	subagent-readonly-guard.sh	MODE = r"[\x27\"][rbtU]*[wax+][rbtUwax+]*[\x27\"]"	MODE = r"[\x27\"][rbtU]*[wa+][rbtUwax+]*[\x27\"]"	inline python open() in x (exclusive create) mode is a write primitive
+H-SR3	subagent-readonly-guard.sh	if lang and code_writes(lang, m.group(3)):	if lang and code_writes(lang, m.group(2)):	a heredoc body fed to an interpreter is inline code and is checked for write primitives
+H-SR4	subagent-readonly-guard.sh	if d == "-" or "$" in d or "`" in d or d.startswith("+"):	if d == "-" or "`" in d or d.startswith("+"):	after cd to a non-literal target such as $VAR, later relative write targets count as existing
+H-SR5	subagent-readonly-guard.sh	if a.startswith("<<<"):	if a.startswith("<<<<"):	the content of a <<< here-string fed to an interpreter is inline code
+H-SR6	subagent-readonly-guard.sh	if isinstance(fp, str) and fp.strip() and exists(fp):	if isinstance(fp, str) and fp.strip() and not exists(fp):	Write is denied only when the target already exists; new report files are allowed
+H-CW1	context-watermark-gate.sh	(u.get("cache_creation_input_tokens") or 0)	0	watermark is input_tokens + cache_read_input_tokens + cache_creation_input_tokens
+H-CW2	context-watermark-gate.sh	used = t	used = max(used, t)	watermark is read from the last assistant message's usage, not the largest one
+H-CW3	context-watermark-gate.sh	CONTEXT_REBLOCK_DELTA_PCT") or 5)	CONTEXT_REBLOCK_DELTA_PCT") or 10)	after a block, the gate blocks again once the watermark rises 5 points (default)
+H-CW4	context-watermark-gate.sh	if p.get("stop_hook_active"):	if p.get("stop_hook_active") == "true":	no block while stop_hook_active is true (JSON boolean), which would loop
+H-CW5	context-watermark-gate.sh	open(mark, "w").write("%.3f" % pct)	pass	the watermark of each block is recorded in the scratchpad so the next turn is not blocked again
+H-RG1	reply-gate.sh	if not tail or tail[-1] not in "？?吗":	if not tail or tail[-1] not in "？?":	A1: a closing offer ending in 吗 without a question mark still counts
+H-RG2	reply-gate.sh	|would you like me to|	|	A1: "Would you like me to ...?" is an English offer phrase
+H-RG3	reply-gate.sh	.rstrip(" \t*_~>")	.rstrip(" \t")	A1: markdown emphasis or quote markers after the closing question mark do not hide the offer
+H-RG4	reply-gate.sh	cjk / (cjk + latin) < 0.2	cjk / (cjk + latin) < 0.5	A2: a reply is wrong-language only when CJK characters are under 20% of CJK plus Latin letters
+H-RG5	reply-gate.sh	if len(re.sub(r"\s", "", t)) <= 150:	if len(re.sub(r"\s", "", t)) <= 50:	A2: replies of 150 or fewer non-space characters are not language-checked
+H-WS1	worktree-symlink-claudemd.sh	*.example|*.sample|*.schema|*.template) continue ;;	*.example|*.sample|*.template) continue ;;	.env.*.schema template files are not symlinked
+H-WS2	worktree-symlink-claudemd.sh	[ "$main" = "$worktree" ] && exit 0	[ "$main" = "$worktree" ] && true	the main worktree itself is never processed
+H-WS3	worktree-symlink-claudemd.sh	      || [ "$head_blob" != "$(git -C "$worktree" hash-object -- "$name" 2>/dev/null)" ]; then	      || false; then	a tracked CLAUDE.md with uncommitted changes is kept and reported, not replaced
+H-WS4	worktree-symlink-claudemd.sh	  .tool_response.path //		PostToolUse on EnterWorktree may carry the worktree path under .tool_response.path
+H-BV1	block-no-verify-commit.sh	if a in ("--no-verify", "-n"): return True	if a == "--no-verify": return True	the short form git commit -n is blocked like --no-verify
+H-BV2	block-no-verify-commit.sh	flat = cmd.replace("$(", " ").replace("`", " ").replace(")", " ")	flat = cmd	git commit -n inside a command substitution $(...) or backticks is still seen
+H-BV3	block-no-verify-commit.sh	if t in GIT_VALUED: i += 2; continue	if t in GIT_VALUED: i += 1; continue	git global options with a separate value (-C dir, -c k=v) are skipped with their value to find the subcommand
+H-BV4	block-no-verify-commit.sh	if i >= len(toks) or toks[i] != "commit":	if i >= len(toks):	non-commit git commands pass through untouched, e.g. git log -n 5
+H-RF1	rule-file-edit-check.sh	*/CLAUDE.md|*/CLAUDE.local.md|	*/CLAUDE.md|	CLAUDE.local.md is an LLM rule file and gets the reminder
+H-RF2	rule-file-edit-check.sh	|*/.claude/output-styles/*)	)	files under .claude/output-styles are LLM rule files and get the reminder
+H-BN1	block-nested-subagent.sh	or not str(payload.get("agent_id") or "").strip():	or not str(payload.get("agent_id") or payload.get("agent_type") or "").strip():	the test is agent_id, not agent_type: the main thread of an --agent session may still dispatch
+H-BN2	block-nested-subagent.sh	"permissionDecision": "deny",	"permissionDecision": "ask",	dispatching a subagent or workflow from inside a subagent is denied, not left to a prompt
+H-OP1	orchestrator-playbook-session-start.sh	")/.." && pwd)	")" && pwd)	the playbook is found one level above hooks/, resolved from the script's own location
+H-OP2	orchestrator-playbook-session-start.sh	"hookEventName": "SessionStart",	"hookEventName": "PostToolUse",	the playbook is injected as SessionStart additionalContext
