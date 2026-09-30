@@ -148,3 +148,15 @@ def test_harness_approval_is_kept_per_variant(tmp_path):
     run.check_harness(args("v1", after), str(tmp_path))
     with pytest.raises(SystemExit):
         run.check_harness(args("v1", before), str(tmp_path))
+
+
+def test_replays_run_at_effort_high_by_default(tmp_path, monkeypatch):
+    import sys
+    import types
+    fake = types.ModuleType("claude_agent_sdk")
+    fake.ClaudeAgentOptions = lambda **kw: kw
+    monkeypatch.setitem(sys.modules, "claude_agent_sdk", fake)
+    args = run.parse_args(["--cases", "c", "--flow", "f", "--config", "x", "--grader", "g", "--eval-config", "e"])
+    case = {"source_session": "/s/abc.jsonl"}
+    opts = run.build_options(case, run.DEFAULT_CFG, args, "/cwd", "/cfg", "/home", "u1", str(tmp_path / "err.log"))
+    assert opts["effort"] == "high"

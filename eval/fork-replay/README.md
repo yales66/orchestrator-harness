@@ -23,7 +23,7 @@ The two fork modes differ only in step 4:
 
 In before mode, a decision that came after tool calls in the same turn is regenerated together with those calls; the result row records how many assistant records were rewound.
 
-The SDK rebuilds the system prompt on every request only when asked to; the runner passes `system_prompt={"type": "preset", "preset": "claude_code", "snapshot": False}` by default so the configuration under test, not the snapshot recorded in the transcript, supplies it. `verbatim_prompts` is on by default, so the resume input is delivered as written, without `@path` expansion, slash-command dispatch or the attachments Claude Code adds to a typed prompt.
+The SDK rebuilds the system prompt on every request only when asked to; the runner passes `system_prompt={"type": "preset", "preset": "claude_code", "snapshot": False}` by default so the configuration under test, not the snapshot recorded in the transcript, supplies it. `verbatim_prompts` is on by default, so the resume input is delivered as written, without `@path` expansion, slash-command dispatch or the attachments Claude Code adds to a typed prompt. Replays run at effort `high` (`sdk.effort`), the level the recorded sessions ran at; neither installed configuration sets it, and `claude-opus-5-5` would otherwise run at its default, `medium`.
 
 ## Side effects
 

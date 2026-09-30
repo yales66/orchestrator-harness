@@ -59,6 +59,9 @@ DEFAULT_CFG = {
         "max_turns": 40,
         "max_budget_usd": 3.0,
         "permission_mode": "default",
+        # The sessions being replayed ran at high, which the installed configurations
+        # do not set, and claude-opus-5-5 otherwise defaults to medium.
+        "effort": "high",
     },
     "retry": {"attempts": 3, "base_s": 5.0},
 }
@@ -383,6 +386,8 @@ def build_options(case, cfg, args, cwd, cfgdir, home, resume_at, stderr_path, ra
         return PermissionResultDeny(message=cfg["stub"]["deny_reason"])
 
     kw["can_use_tool"] = deny_all
+    if sdk.get("effort"):
+        kw["effort"] = sdk["effort"]
     if sdk["rebuild_system_prompt"]:
         kw["system_prompt"] = {"type": "preset", "preset": "claude_code", "snapshot": False}
     if sdk.get("verbatim_prompts"):

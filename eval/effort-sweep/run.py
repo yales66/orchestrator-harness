@@ -120,7 +120,7 @@ def main_prompt(case: dict, effort: str, inline_brief: str | None) -> str:
             f'<<<BRIEF\n{inline_brief}\nBRIEF>>>')
 
 
-def child_env(cfg: Path, brief_file: Path, effort: str) -> dict:
+def child_env(cfg: Path, brief_file: Path, effort: str, bodies: Path | None = None) -> dict:
     env = {
         "PATH": os.environ["PATH"], "HOME": os.environ["HOME"], "USER": os.environ.get("USER", ""),
         "LOGNAME": os.environ.get("LOGNAME", ""), "SHELL": "/bin/bash", "LANG": "en_US.UTF-8", "TERM": "dumb",
@@ -130,8 +130,33 @@ def child_env(cfg: Path, brief_file: Path, effort: str) -> dict:
     for key in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"):
         if os.environ.get(key):
             env[key] = os.environ[key]
+    if bodies is not None:
+        # Claude Code writes every request body here; the effort the subagent's
+        # requests carried is read back from them.
+        env["OTEL_LOG_RAW_API_BODIES"] = f"file:{bodies}"
     assert "CLAUDE_CODE_EFFORT_LEVEL" not in env
     return env
+
+
+def efforts_from_bodies(bodies: Path, brief: str) -> dict:
+    """The output_config.effort values of the captured requests, split by thread.
+
+    A request belongs to the subagent when its first user message contains the
+    brief's opening; every other request is the dispatching main thread's. A
+    request that sends no effort runs at the model's default and is listed as such.
+    """
+    head = normalise_brief(brief)[:200]
+    seen = {"subagent": set(), "main": set()}
+    for f in sorted(Path(bodies).glob("*.request.json")):
+        body = json.loads(f.read_text(encoding="utf-8"))
+        body = body.get("body", body)
+        msgs = body.get("messages") or []
+        first = msgs[0].get("content") if msgs else ""
+        text = first if isinstance(first, str) else "".join(
+            b.get("text", "") for b in first or [] if isinstance(b, dict))
+        who = "subagent" if head and head in normalise_brief(text) else "main"
+        seen[who].add((body.get("output_config") or {}).get("effort") or "default")
+    return {k: sorted(v) for k, v in seen.items()}
 
 
 # ---------------------------------------------------------------- transcripts
@@ -333,7 +358,7 @@ def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
                   f"  agent file {cfg / 'agents' / (agent_name(effort) + '.md')}\n  command {' '.join(cmd[:2])} <main prompt> {' '.join(cmd[3:])}")
             return
 
-        env = child_env(cfg, brief_file, effort)
+        env = child_env(cfg, brief_file, effort, tmp / "bodies")
         t0 = time.monotonic()
         try:
             with open(tmp / "stream.jsonl", "w") as so, open(tmp / "stderr.log", "w") as se:
@@ -373,6 +398,13 @@ def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
         if not models or wrong:
             record_error(vdir, case, rep, "model_mismatch", f"served {sorted(set(models))}, expected {MODEL}",
                          models[-1] if models else None, usage)
+            return
+
+        efforts = efforts_from_bodies(tmp / "bodies", brief)
+        if efforts["subagent"] != [effort]:
+            record_error(vdir, case, rep, "effort_mismatch",
+                         f"subagent requests carried effort {efforts['subagent']}, expected {effort}",
+                         models[-1], usage)
             return
 
         uses = tool_uses(sub)
@@ -416,6 +448,7 @@ def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
             "tool_calls": len(uses),
             "meta": {
                 "effort_requested": effort, "effort_seen": effort_evidence(sub, sub_meta),
+                "effort_in_requests": efforts,
                 "tier": case["tier"], "base": case["base"], "exit_code": exit_code, "wall_s": round(wall, 1),
                 "dispatch_usage": main_usage, "dispatch_models": sorted(set(main_models)),
                 "leak_signals": leak_signals(uses, case),
