@@ -1,67 +1,128 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1068" height="508" viewBox="0 0 1068 508" role="img" aria-label="Architecture: the main thread (orchestrator) receives CLAUDE.md, the orchestrator playbook injected by the SessionStart hook, and skills on demand. It sends a brief to a subagent, which receives CLAUDE.md, the brief and skills on demand, cannot dispatch subagents, and returns a bounded report; the researcher subagent creates new files only. On every tool call from either thread, tool-call hooks run: PreToolUse denies nested dispatch and --no-verify, the secret guard denies calls that would print secret values, and the read-only guard lets researcher subagents only create new files; PostToolUse adds a rule-file reminder and worktree links. When the main thread stops, the Stop hooks run: the reply gate blocks the stop once when the reply ends by offering a next step or, with REPLY_LANG=zh, is not Chinese, and the context watermark gate requires a handoff file." font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
-<title>Architecture: the main thread (orchestrator) receives CLAUDE.md, the orchestrator playbook injected by the SessionStart hook, and skills on demand. It sends a brief to a subagent, which receives CLAUDE.md, the brief and skills on demand, cannot dispatch subagents, and returns a bounded report; the researcher subagent creates new files only. On every tool call from either thread, tool-call hooks run: PreToolUse denies nested dispatch and --no-verify, the secret guard denies calls that would print secret values, and the read-only guard lets researcher subagents only create new files; PostToolUse adds a rule-file reminder and worktree links. When the main thread stops, the Stop hooks run: the reply gate blocks the stop once when the reply ends by offering a next step or, with REPLY_LANG=zh, is not Chinese, and the context watermark gate requires a handoff file.</title>
-<defs><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#9198a1"/></marker></defs>
-<g id="main" transform="translate(409,8)">
-<rect x="0.75" y="0.75" width="267.5" height="226.5" rx="8" fill="#0c2d6b" stroke="#4493f8" stroke-width="1.5"/>
-<text x="16" y="29" font-size="15" font-weight="600" fill="#e6edf3">Main thread</text>
-<text x="16" y="47" font-size="12.5" fill="#9198a1">orchestrator</text>
-<line x1="1.5" y1="55" x2="267.5" y2="55" stroke="#1f4f96" stroke-width="1"/>
-<text x="16" y="85.5" font-size="13.5" fill="#e6edf3">CLAUDE.md</text>
-<rect x="8" y="98" width="237" height="50" rx="5" fill="#3d1f00" stroke="#f0883e" stroke-width="1.25"/>
-<text x="16" y="117.5" font-size="13.5" fill="#ffa657">orchestrator playbook,</text>
-<text x="16" y="137.5" font-size="13.5" fill="#ffa657">injected by the SessionStart hook</text>
-<text x="16" y="169.5" font-size="13.5" fill="#e6edf3">skills, on demand</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1300" height="1092" viewBox="0 0 1300 1092" role="img" aria-label="Architecture of one turn. At session start, after /clear and after compaction, the SessionStart hook injects the orchestrator playbook into the main thread only; subagents do not receive it. The main thread sends a brief to a subagent, which returns a bounded report. Every tool call from either thread passes PreToolUse before the tool runs: it denies nested dispatch inside subagents, git commit --no-verify, calls that would print a secret value, and anything but creating new files for researcher subagents. A denial sends its reason back to the calling thread, which tries another way; an allowed call runs the tool. After the tool runs, PostToolUse returns a rule-file reminder as added context to the calling thread when a rule file was edited, and links a newly entered worktree on disk without replying. When the main thread tries to end the turn, the Stop hooks run, and if both pass the reply reaches the user. The context watermark gate adds a reminder over 35% and blocks once over 40%; the reply gate blocks once when the reply&#x27;s last sentence offers a next step. A block returns control to the main thread: after the reply gate it does the offered step, and after the watermark gate it writes the handoff file and then stops, and a new session reads that file to carry on. Each gate blocks once, so the resumed turn&#x27;s next attempt to stop passes." font-family="system-ui, -apple-system, &#x27;Segoe UI&#x27;, Helvetica, Arial, sans-serif">
+<title>Architecture of one turn. At session start, after /clear and after compaction, the SessionStart hook injects the orchestrator playbook into the main thread only; subagents do not receive it. The main thread sends a brief to a subagent, which returns a bounded report. Every tool call from either thread passes PreToolUse before the tool runs: it denies nested dispatch inside subagents, git commit --no-verify, calls that would print a secret value, and anything but creating new files for researcher subagents. A denial sends its reason back to the calling thread, which tries another way; an allowed call runs the tool. After the tool runs, PostToolUse returns a rule-file reminder as added context to the calling thread when a rule file was edited, and links a newly entered worktree on disk without replying. When the main thread tries to end the turn, the Stop hooks run, and if both pass the reply reaches the user. The context watermark gate adds a reminder over 35% and blocks once over 40%; the reply gate blocks once when the reply&#x27;s last sentence offers a next step. A block returns control to the main thread: after the reply gate it does the offered step, and after the watermark gate it writes the handoff file and then stops, and a new session reads that file to carry on. Each gate blocks once, so the resumed turn&#x27;s next attempt to stop passes.</title>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#9198a1"/></marker><marker id="back" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#f0883e"/></marker></defs>
+<g id="legend">
+<path d="M16,30 L60,30" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="72" y="34.5" font-size="12.5" fill="#c9d1d9">call or result moves forward</text>
+<path d="M16,56 L60,56" fill="none" stroke="#f0883e" stroke-width="2" marker-end="url(#back)"/>
+<text x="72" y="60.5" font-size="12.5" fill="#ffa657">blocked or sent back: control returns to the thread</text>
 </g>
-<g id="subagent" transform="translate(806,8)">
-<rect x="0.75" y="0.75" width="252.5" height="226.5" rx="8" fill="#0c2d6b" stroke="#4493f8" stroke-width="1.5"/>
-<text x="16" y="29" font-size="15" font-weight="600" fill="#e6edf3">Subagent</text>
-<line x1="1.5" y1="55" x2="252.5" y2="55" stroke="#1f4f96" stroke-width="1"/>
-<text x="16" y="85.5" font-size="13.5" fill="#e6edf3">CLAUDE.md</text>
-<text x="16" y="117.5" font-size="13.5" fill="#e6edf3">the brief</text>
-<text x="16" y="149.5" font-size="13.5" fill="#e6edf3">skills, on demand</text>
-<line x1="1.5" y1="164" x2="252.5" y2="164" stroke="#1f4f96" stroke-width="1" stroke-dasharray="3 3"/>
-<text x="16" y="188.5" font-size="13.5" fill="#ff7b72">cannot dispatch subagents</text>
-<text x="16" y="208.5" font-size="13.5" fill="#ff7b72">researcher: creates new files only</text>
+<g id="sessionstart">
+<rect id="ss-box" x="600.75" y="16.75" width="338.5" height="62.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
+<text x="770" y="42" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="ss-box">SessionStart hook</text>
+<text x="770" y="64" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="ss-box">session start, /clear, after compaction</text>
 </g>
-<g id="hooks" transform="translate(409,292)">
-<rect x="0.75" y="0.75" width="649.5" height="206.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
-<text x="325.5" y="29" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3">Tool-call hooks</text>
-<text x="16" y="56.5" font-size="13.5" font-weight="600" fill="#e6edf3">PreToolUse</text>
-<text x="16" y="76.5" font-size="13.5" fill="#e6edf3">deny nested dispatch</text>
-<text x="16" y="96.5" font-size="13.5" fill="#e6edf3">deny --no-verify</text>
-<text x="16" y="120.5" font-size="13.5" fill="#e6edf3">secret guard: deny calls that</text>
-<text x="28" y="140.5" font-size="13.5" fill="#e6edf3">would print secret values</text>
-<text x="16" y="168.5" font-size="13.5" fill="#e6edf3">read-only guard: researcher</text>
-<text x="28" y="188.5" font-size="13.5" fill="#e6edf3">subagents may only create new files</text>
-<text x="341.5" y="56.5" font-size="13.5" font-weight="600" fill="#e6edf3">PostToolUse</text>
-<text x="341.5" y="76.5" font-size="13.5" fill="#e6edf3">rule-file reminder</text>
-<text x="341.5" y="96.5" font-size="13.5" fill="#e6edf3">worktree links</text>
-<line x1="325.5" y1="40" x2="325.5" y2="198" stroke="#3d444d" stroke-width="1"/>
-<line x1="1.5" y1="38" x2="649.5" y2="38" stroke="#3d444d" stroke-width="1"/>
+<path d="M770,80 L770,150" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="782" y="110" font-size="12.5" text-anchor="start" fill="#c9d1d9">injects the orchestrator playbook</text>
+<text x="782" y="128" font-size="12.5" text-anchor="start" fill="#c9d1d9">into the main thread only</text>
+<g id="main">
+<rect id="main-box" x="600.75" y="150.75" width="338.5" height="178.5" rx="8" fill="#0c2d6b" stroke="#4493f8" stroke-width="1.5"/>
+<text x="616" y="179" font-size="15" font-weight="600" fill="#e6edf3" data-box="main-box">Main thread</text>
+<text x="616" y="197" font-size="12.5" fill="#9198a1" data-box="main-box">orchestrator</text>
+<line x1="601.5" y1="205" x2="938.5" y2="205" stroke="#1f4f96" stroke-width="1"/>
+<text x="616" y="232" font-size="13.5" fill="#e6edf3" data-box="main-box">CLAUDE.md</text>
+<text x="616" y="258" font-size="13.5" fill="#e6edf3" data-box="main-box">orchestrator playbook</text>
+<text x="616" y="284" font-size="13.5" fill="#e6edf3" data-box="main-box">skills, on demand</text>
 </g>
-<g id="stop" transform="translate(8,54)">
-<rect x="0.75" y="0.75" width="319.5" height="134.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
-<text x="160.5" y="29" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3">Stop hooks</text>
-<line x1="1.5" y1="38" x2="319.5" y2="38" stroke="#3d444d" stroke-width="1"/>
-<text x="16" y="56.5" font-size="13.5" fill="#e6edf3">reply gate: blocks the stop once when</text>
-<text x="28" y="76.5" font-size="13.5" fill="#e6edf3">the reply ends by offering a next step</text>
-<text x="28" y="96.5" font-size="13.5" fill="#e6edf3">or, with REPLY_LANG=zh, is not Chinese</text>
-<text x="16" y="120.5" font-size="13.5" fill="#e6edf3">context watermark gate</text>
+<g id="subagent">
+<rect id="sub-box" x="1080.75" y="150.75" width="202.5" height="178.5" rx="8" fill="#0c2d6b" stroke="#4493f8" stroke-width="1.5"/>
+<text x="1096" y="179" font-size="15" font-weight="600" fill="#e6edf3" data-box="sub-box">Subagent</text>
+<line x1="1081.5" y1="205" x2="1282.5" y2="205" stroke="#1f4f96" stroke-width="1"/>
+<text x="1096" y="232" font-size="13.5" fill="#e6edf3" data-box="sub-box">CLAUDE.md</text>
+<text x="1096" y="258" font-size="13.5" fill="#e6edf3" data-box="sub-box">the brief</text>
+<text x="1096" y="284" font-size="13.5" fill="#e6edf3" data-box="sub-box">skills, on demand</text>
+<line x1="1081.5" y1="296" x2="1282.5" y2="296" stroke="#1f4f96" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="1096" y="318" font-size="12.5" fill="#9198a1" data-box="sub-box">no orchestrator playbook</text>
 </g>
-<g id="handoff" transform="translate(8,246)">
-<rect x="0.75" y="0.75" width="319.5" height="44.5" rx="8" fill="#0d1117" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="5 3"/>
-<text x="160.5" y="29" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3">Handoff file</text>
+<path d="M940,215 L1080,215" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="1010" y="206" font-size="12.5" text-anchor="middle" fill="#c9d1d9">brief</text>
+<path d="M1080,265 L940,265" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="1010" y="256" font-size="12.5" text-anchor="middle" fill="#c9d1d9">bounded report</text>
+<g id="stop">
+<rect id="stop-box" x="16.75" y="150.75" width="302.5" height="188.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
+<text x="168" y="179" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="stop-box">Stop hooks</text>
+<line x1="17.5" y1="188" x2="318.5" y2="188" stroke="#3d444d" stroke-width="1"/>
+<text x="32" y="210" font-size="13.5" font-weight="600" fill="#e6edf3" data-box="stop-box">context watermark gate</text>
+<text x="32" y="230" font-size="13.5" fill="#e6edf3" data-box="stop-box">over 35%: reminder only, stop passes</text>
+<text x="32" y="250" font-size="13.5" fill="#e6edf3" data-box="stop-box">over 40%: blocks once</text>
+<line x1="17.5" y1="262" x2="318.5" y2="262" stroke="#3d444d" stroke-width="1"/>
+<text x="32" y="284" font-size="13.5" font-weight="600" fill="#e6edf3" data-box="stop-box">reply gate</text>
+<text x="32" y="304" font-size="13.5" fill="#e6edf3" data-box="stop-box">blocks once when the reply&#x27;s last</text>
+<text x="32" y="324" font-size="13.5" fill="#e6edf3" data-box="stop-box">sentence offers a next step</text>
 </g>
-<path d="M678,105 L806,105" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="742" y="96" font-size="12.5" text-anchor="middle" fill="#c9d1d9">brief</text>
-<path d="M806,139 L678,139" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="742" y="130" font-size="12.5" text-anchor="middle" fill="#c9d1d9">bounded report</text>
-<path d="M544,236 L544,292" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="496.5" y="268" font-size="12.5" text-anchor="middle" fill="#c9d1d9">every tool call</text>
-<path d="M933,236 L933,292" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="885.5" y="268" font-size="12.5" text-anchor="middle" fill="#c9d1d9">every tool call</text>
-<path d="M409,122 L329,122" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="369" y="113" font-size="12.5" text-anchor="middle" fill="#c9d1d9">on stop</text>
-<path d="M169,190 L169,246" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="139" y="222" font-size="12.5" text-anchor="middle" fill="#c9d1d9">requires</text>
+<path d="M600,205 L320,205" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="460" y="196" font-size="12.5" text-anchor="middle" fill="#c9d1d9">tries to end the turn</text>
+<path d="M320,265 L600,265" fill="none" stroke="#f0883e" stroke-width="2" marker-end="url(#back)"/>
+<text x="460" y="256" font-size="12.5" font-weight="600" text-anchor="middle" fill="#ffa657">blocked: back to the main thread</text>
+<text x="460" y="285" font-size="12.5" text-anchor="middle" fill="#ffa657">reply gate: do the offered step</text>
+<text x="460" y="303" font-size="12.5" text-anchor="middle" fill="#ffa657">watermark gate: write handoff, then stop</text>
+<text x="460" y="334" font-size="12.5" text-anchor="middle" fill="#9198a1">each gate blocks once: the resumed</text>
+<text x="460" y="352" font-size="12.5" text-anchor="middle" fill="#9198a1">turn&#x27;s next attempt to stop passes</text>
+<path d="M100,340 L100,420" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="112" y="384" font-size="12.5" text-anchor="start" fill="#c9d1d9">both pass</text>
+<g id="user">
+<rect id="user-box" x="16.75" y="420.75" width="302.5" height="56.5" rx="8" fill="#0d1117" stroke="#9198a1" stroke-width="1.5"/>
+<text x="168" y="444" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="user-box">User</text>
+<text x="168" y="465" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="user-box">the reply reaches the user</text>
+</g>
+<g id="handoff">
+<rect id="handoff-box" x="344.75" y="400.75" width="198.5" height="54.5" rx="8" fill="#0d1117" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="5 3"/>
+<text x="444" y="434" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="handoff-box">Handoff file</text>
+</g>
+<path d="M620,330 L620,428 L544,428" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="632" y="400" font-size="12.5" text-anchor="start" fill="#c9d1d9">writes</text>
+<g id="newsession">
+<rect id="new-box" x="344.75" y="520.75" width="198.5" height="56.5" rx="8" fill="#0d1117" stroke="#9198a1" stroke-width="1.5"/>
+<text x="444" y="544" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="new-box">New session</text>
+<text x="444" y="565" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="new-box">reads the handoff, carries on</text>
+</g>
+<path d="M444,456 L444,520" fill="none" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+<text x="434" y="492" font-size="12.5" text-anchor="end" fill="#c9d1d9">read at start</text>
+<path d="M770,330 L770,480" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="782" y="400" font-size="12.5" text-anchor="start" fill="#c9d1d9">tool call</text>
+<path d="M1182,330 L1182,400 L880,400 L880,480" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="1194" y="370" font-size="12.5" text-anchor="start" fill="#c9d1d9">tool call</text>
+<g id="caller">
+<rect id="caller-box" x="600.75" y="480.75" width="338.5" height="58.5" rx="8" fill="#0c2d6b" stroke="#4493f8" stroke-width="1.5"/>
+<text x="770" y="505" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="caller-box">Calling thread</text>
+<text x="770" y="526" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="caller-box">main thread or subagent</text>
+</g>
+<path d="M770,540 L770,590" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g id="pre">
+<rect id="pre-box" x="600.75" y="590.75" width="338.5" height="200.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
+<text x="616" y="616" font-size="15" font-weight="600" fill="#e6edf3" data-box="pre-box">PreToolUse</text>
+<text x="924" y="616" font-size="12.5" text-anchor="end" fill="#9198a1" data-box="pre-box">before the tool runs</text>
+<line x1="601.5" y1="628" x2="938.5" y2="628" stroke="#3d444d" stroke-width="1"/>
+<text x="616" y="650" font-size="13.5" fill="#e6edf3" data-box="pre-box">deny nested dispatch (subagents only)</text>
+<text x="616" y="676" font-size="13.5" fill="#e6edf3" data-box="pre-box">deny git commit --no-verify</text>
+<text x="616" y="702" font-size="13.5" fill="#e6edf3" data-box="pre-box">secret guard: deny calls that would</text>
+<text x="628" y="722" font-size="13.5" fill="#e6edf3" data-box="pre-box">print a secret value</text>
+<text x="616" y="748" font-size="13.5" fill="#e6edf3" data-box="pre-box">read-only guard: researcher subagents</text>
+<text x="628" y="768" font-size="13.5" fill="#e6edf3" data-box="pre-box">may only create new files</text>
+</g>
+<path d="M770,792 L770,836" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="782" y="818" font-size="12.5" text-anchor="start" fill="#c9d1d9">allowed</text>
+<g id="tool">
+<rect id="tool-box" x="600.75" y="836.75" width="338.5" height="40.5" rx="8" fill="#0d1117" stroke="#9198a1" stroke-width="1.5"/>
+<text x="770" y="862" font-size="13.5" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="tool-box">the tool runs</text>
+</g>
+<path d="M770,878 L770,922" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<g id="post">
+<rect id="post-box" x="600.75" y="922.75" width="338.5" height="148.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
+<text x="616" y="948" font-size="15" font-weight="600" fill="#e6edf3" data-box="post-box">PostToolUse</text>
+<text x="924" y="948" font-size="12.5" text-anchor="end" fill="#9198a1" data-box="post-box">after the tool runs</text>
+<line x1="601.5" y1="960" x2="938.5" y2="960" stroke="#3d444d" stroke-width="1"/>
+<text x="616" y="982" font-size="13.5" fill="#e6edf3" data-box="post-box">rule-file reminder, when a rule file</text>
+<text x="628" y="1002" font-size="13.5" fill="#e6edf3" data-box="post-box">was edited</text>
+<text x="616" y="1028" font-size="13.5" fill="#e6edf3" data-box="post-box">worktree links, on entering a new</text>
+<text x="628" y="1048" font-size="13.5" fill="#e6edf3" data-box="post-box">worktree: symlinks on disk, no reply</text>
+</g>
+<path d="M940,721 L1004,721 L1004,510 L940,510" fill="none" stroke="#f0883e" stroke-width="2" marker-end="url(#back)"/>
+<text x="1018" y="590" font-size="12.5" font-weight="600" text-anchor="start" fill="#ffa657">denied: the reason returns to</text>
+<text x="1018" y="608" font-size="12.5" text-anchor="start" fill="#ffa657">the calling thread, which</text>
+<text x="1018" y="626" font-size="12.5" text-anchor="start" fill="#ffa657">tries another way</text>
+<path d="M600,982 L566,982 L566,520 L600,520" fill="none" stroke="#f0883e" stroke-width="2" marker-end="url(#back)"/>
+<text x="552" y="806" font-size="12.5" text-anchor="end" fill="#ffa657">tool result, plus the rule-file</text>
+<text x="552" y="824" font-size="12.5" text-anchor="end" fill="#ffa657">reminder as added context,</text>
+<text x="552" y="842" font-size="12.5" text-anchor="end" fill="#ffa657">return to the calling thread</text>
 </svg>
