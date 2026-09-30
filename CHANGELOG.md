@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-09-30
+
+### Added
+
+| Component | What it provides |
+|---|---|
+| ADR 0007 | `docs/adr/0007-handoff-timing-weighs-switch-against-long-context.md` and its Chinese copy record how the handoff timing weighs a session switch against a longer context. It supersedes the handoff timing of ADR 0004, whose way of reading the watermark from transcript usage stands |
+
+### Changed
+
+| Component | What changed |
+|---|---|
+| Playbook §3, the Timing item | Past the watermark hard line the main thread weighs the cost of a switch, a re-read in the new session and an interruption for the user, against the worse judgement of a longer context. It finishes remaining work that its context already covers, such as a commit, push or pull request, and writes the handoff and asks the user to switch sessions before a new large block of work. It writes the handoff at once when the user ends the session or the gate blocks a second time |
+| `context-watermark-gate.sh` | Past 35% the gate reminds once per session, and its reminder no longer asks for a handoff. Its first block past 40% restates the weighing, and a second block after another 5-point rise asks for the handoff at once. Both scratchpad marks are cleared when usage falls back below 35%, as after compaction |
+| Hook regression tests | Cases for the single reminder, the reset below the reminder line and the wording of each block reason. The hook tests hold 494 cases per copy |
+| README and architecture diagrams | The design goals, the architecture section, the four diagrams and the hook table describe the new handoff timing, and "Two mechanisms worth a closer look" covers the playbook reaching only the main thread and the Stop gates handing control back to it |
+| Static context measurement | Rerun on the current playbooks with Claude Code 2.1.285 and claude-opus-5-5. Each subagent's first-request input is 10,188 tokens in H against 13,491 in N for the English copy, 3,303 fewer or about 24%, and 10,112 against 13,670 for the Chinese copy, 3,558 fewer or about 26% |
+| English playbook | Reworded to 9,882 characters, below the 10,000 at which Claude Code passes only a preview of a SessionStart injection |
+
 ## [0.3.0] - 2026-09-30
 
 ### Added

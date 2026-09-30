@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. In effect since 19 September 2026.
+Accepted. In effect since 19 September 2026. Its handoff timing is superseded by [ADR 0007](0007-handoff-timing-weighs-switch-against-long-context.md).
 
 ## Context
 

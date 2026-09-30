@@ -8,10 +8,10 @@
 
 | 主张 | 证据 | 在仓库根目录复跑 |
 |---|---|---|
-| 钩子的行为与 README 描述一致 | 九个测试文件，每个副本 486 个用例，全部通过；持续集成在 Ubuntu 与 macOS 上对两份副本都跑一遍 | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
+| 钩子的行为与 README 描述一致 | 九个测试文件，每个副本 494 个用例，全部通过；持续集成在 Ubuntu 与 macOS 上对两份副本都跑一遍 | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
 | `en/` 与 `zh/` 是一致的两份副本 | 一致性检查比对两边的文件清单，并要求钩子、测试与代理定义逐字节相同 | `bash scripts/check-parity.sh` |
 | 编排手册只送达主线程 | SessionStart 钩子的测试逐字节核对注入的文本与编排手册；静态测量在 H 组主线程的会话记录里找到编排手册，在子智能体的会话记录里找不到 | `bash en/hooks/tests/orchestrator-playbook-session-start.test.sh` 与 `bash eval/static-context/run.sh` |
-| 编排手册不放进 `CLAUDE.md`，每个子智能体的首次请求输入都变小 | H 组 10,190 词元，N 组 13,513 词元，少 3,323 词元，约 25% | `bash eval/static-context/run.sh` |
+| 编排手册不放进 `CLAUDE.md`，每个子智能体的首次请求输入都变小 | H 组 10,188 词元，N 组 13,491 词元，少 3,303 词元，约 24% | `bash eval/static-context/run.sh` |
 | 钩子测试能抓住它没有针对调过的缺陷 | 不看测试写出的 35 个变异体里杀死 30 个 | `HM_MANIFEST=eval/hook-mutations/holdout.tsv HM_OUT=eval/hook-mutations/holdout-results.md bash eval/hook-mutations/run.sh` |
 | 回复出口拦下了它针对的收尾提议里约三分之一 | 在 2,734 条历史回复上，收尾提议规则的精确率 68.5%，召回率 31.7% | `python3 eval/reply-gate-replay/score.py --data "$DATA"` |
 
@@ -30,10 +30,10 @@
 
 | 组 | 主线程首次请求输入（词元） | 子智能体首次请求输入（词元） |
 |---|---|---|
-| H | 20,341 | 10,190 |
-| N | 20,330 | 13,513 |
+| H | 20,317 | 10,188 |
+| N | 20,306 | 13,491 |
 
-编排手册放在哪里，差别体现在子智能体一列：把编排手册留在 `CLAUDE.md` 之外，每个子智能体的首次请求输入从 13,513 词元降到 10,190 词元，减少 3,323 词元，约 25%。两组主线程都收到完整的编排手册，首次请求输入相差 11 词元。每组两次重复的总数都相同。中文配置 `zh/` 另测了一次（`SC_COPY=zh`）：子智能体首次请求输入从 13,641 词元降到 10,108 词元，减少 3,533 词元，约 26%。那次 H 组第一次运行时 Claude Code 多下发了 6 个延迟加载的工具，子智能体为 11,371 词元，与其余三次的工具集不同，所以取第二次；逐次数字见 [results.zh.md](../../eval/static-context/results.zh.md)。
+编排手册放在哪里，差别体现在子智能体一列：把编排手册留在 `CLAUDE.md` 之外，每个子智能体的首次请求输入从 13,491 词元降到 10,188 词元，减少 3,303 词元，约 24%。两组主线程都收到完整的编排手册，首次请求输入相差 11 词元。N 组第二次运行的子智能体跑在 claude-haiku-4-5-20251001 上，不是 claude-opus-5-5，得 15,449 词元，所以比较取第一次，H 组两次的总数相同。中文配置 `zh/` 另测了一次（`SC_COPY=zh`）：子智能体首次请求输入从 13,670 词元降到 10,112 词元，减少 3,558 词元，约 26%，每组两次重复的总数都相同；逐次数字见 [results.zh.md](../../eval/static-context/results.zh.md)。
 
 测量安装的是英文配置 `en/`，运行环境为 Claude Code 2.1.285，主线程与子智能体都用 claude-opus-5-5，只派出一个通用子智能体。Claude Code 自带的系统提示词与工具定义随版本变化，所以这些绝对数值只对 2.1.285 成立，换版本需用该脚本重测。这些数字只覆盖首次请求输入，不代表整个任务的花费，因为之后的轮次还会叠加工具结果与对话历史。词元数也不等于计费金额，缓存读取按基础输入价的折扣计费。这项测量也说明不了更精简的子智能体是否干得更好。逐次数字、缓存写入与缓存读取的拆分，以及编排手册是否加载到预期位置的核对，见 [eval/static-context/results.md](../../eval/static-context/results.md)。
 

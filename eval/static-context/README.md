@@ -28,10 +28,10 @@ The numbers in `results.md` were measured on Claude Code 2.1.285 with `claude-op
 
 | Group | Main thread first-request input (tokens) | Subagent first-request input (tokens) |
 |---|---|---|
-| H | 20,341 | 10,190 |
-| N | 20,330 | 13,513 |
+| H | 20,317 | 10,188 |
+| N | 20,306 | 13,491 |
 
-The subagent's first-request input is 3,323 tokens lower in H, about 25%, because N's subagent loads the playbook with CLAUDE.md. The load checks in `results.md` find the full playbook in the context the main thread receives in both groups, and the two main threads differ by 11 tokens. Both repeats of each group gave identical totals. The Chinese copy, measured with `SC_COPY=zh`, cuts the subagent's first-request input from 13,641 to 10,108 tokens, 3,533 fewer or about 26%; in the first H run of that measurement Claude Code sent six extra deferred tools and the subagent took 11,371 tokens, so the comparison uses the second run, whose tool set matches the other three ([results.zh.md](results.zh.md)). The table reports the first repeat, and `bash eval/static-context/run.sh` reruns the whole measurement.
+The subagent's first-request input is 3,303 tokens lower in H, about 24%, because N's subagent loads the playbook with CLAUDE.md. The load checks in `results.md` find the full playbook in the context the main thread receives in both groups, and the two main threads differ by 11 tokens. In the second N run the subagent ran on claude-haiku-4-5-20251001 rather than claude-opus-5-5 and took 15,449 tokens, so the comparison uses the first run, and both H runs gave identical totals. The Chinese copy, measured with `SC_COPY=zh`, cuts the subagent's first-request input from 13,670 to 10,112 tokens, 3,558 fewer or about 26%, and both repeats of each group gave identical totals ([results.zh.md](results.zh.md)). The table reports the first repeat, and `bash eval/static-context/run.sh` reruns the whole measurement.
 
 ## Files
 

@@ -15,23 +15,23 @@ Each run also uses a fresh HOME and an empty working directory outside any git r
 
 | Group | Run | Main input | Main cache write | Main cache read | Main total | Subagent input | Subagent cache write | Subagent cache read | Subagent total | Main model | Subagent model |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| H | 1 | 2 | 10240 | 10225 | 20467 | 2 | 11369 | 0 | 11371 | claude-opus-5-5 | claude-opus-5-5 |
-| H | 2 | 2 | 10240 | 10225 | 20467 | 2 | 4172 | 5934 | 10108 | claude-opus-5-5 | claude-opus-5-5 |
-| N | 1 | 2 | 10229 | 10225 | 20456 | 2 | 7705 | 5934 | 13641 | claude-opus-5-5 | claude-opus-5-5 |
-| N | 2 | 2 | 10229 | 10225 | 20456 | 2 | 7705 | 5934 | 13641 | claude-opus-5-5 | claude-opus-5-5 |
+| H | 1 | 2 | 10273 | 10225 | 20500 | 2 | 4176 | 5934 | 10112 | claude-opus-5-5 | claude-opus-5-5 |
+| H | 2 | 2 | 10273 | 10225 | 20500 | 2 | 4176 | 5934 | 10112 | claude-opus-5-5 | claude-opus-5-5 |
+| N | 1 | 2 | 10262 | 10225 | 20489 | 2 | 7734 | 5934 | 13670 | claude-opus-5-5 | claude-opus-5-5 |
+| N | 2 | 2 | 10262 | 10225 | 20489 | 2 | 7734 | 5934 | 13670 | claude-opus-5-5 | claude-opus-5-5 |
 
 ## Repeat consistency
 
 | Group | Main totals | Subagent totals | Identical across repeats |
 |---|---|---|---|
-| H | 20467, 20467 | 11371, 10108 | no |
-| N | 20456, 20456 | 13641, 13641 | yes |
+| H | 20500, 20500 | 10112, 10112 | yes |
+| N | 20489, 20489 | 13670, 13670 | yes |
 
 ## Differences between groups (first repeat, totals)
 
 | Comparison | Main thread | Subagent |
 |---|---|---|
-| N minus H | -11 | +2270 |
+| N minus H | -11 | +3558 |
 
 ## Load checks
 
@@ -39,8 +39,8 @@ Each run also uses a fresh HOME and an empty working directory outside any git r
 |---|---|---|---|---|---|---|
 | H | 1 | SessionStart, PreToolUse, Stop | yes | no | 2034 | yes |
 | H | 2 | SessionStart, PreToolUse, Stop | yes | no | 2034 | yes |
-| N | 1 | PreToolUse, Stop | yes | yes | 11084 | yes |
-| N | 2 | PreToolUse, Stop | yes | yes | 11084 | yes |
+| N | 1 | PreToolUse, Stop | yes | yes | 11176 | yes |
+| N | 2 | PreToolUse, Stop | yes | yes | 11176 | yes |
 
 ## Environment
 

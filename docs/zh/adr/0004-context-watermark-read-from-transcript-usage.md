@@ -2,7 +2,7 @@
 
 ## 状态
 
-已采纳，自 2026 年 9 月 19 日起生效。
+已采纳，自 2026 年 9 月 19 日起生效。其中的交接时机由 [ADR 0007](0007-handoff-timing-weighs-switch-against-long-context.md) 取代。
 
 ## 背景
 

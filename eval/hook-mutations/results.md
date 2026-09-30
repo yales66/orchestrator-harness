@@ -16,7 +16,7 @@ The fingerprint is the first 12 hex digits of the SHA-256 of the hook followed b
 |---|---|---:|---:|---|
 | `block-nested-subagent.sh` | green | 4 / 4 | 0 | `65a0d79a9d64` |
 | `block-no-verify-commit.sh` | green | 6 / 6 | 0 | `42d663ccd4ab` |
-| `context-watermark-gate.sh` | green | 7 / 7 | 0 | `b357a69fb4e9` |
+| `context-watermark-gate.sh` | green | 7 / 7 | 0 | `c10f66685b8e` |
 | `orchestrator-playbook-session-start.sh` | green | 3 / 3 | 0 | `0e069d370ee9` |
 | `reply-gate.sh` | green | 7 / 7 | 0 | `677f1ad43788` |
 | `rule-file-edit-check.sh` | green | 4 / 4 | 0 | `16f2f8bbb442` |

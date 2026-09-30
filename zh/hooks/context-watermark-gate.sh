@@ -5,7 +5,8 @@
 # input_tokens + cache_read_input_tokens + cache_creation_input_tokens 就是
 # 这一轮真实送进模型的量。Stop hook 的输入 JSON 不带任何 token 字段,只能这么拿。
 #
-# 两道线:WARN 只提醒(additionalContext),HARD 拦一次要求落盘交接。
+# 两道线:WARN 每个会话只提醒一次(scratchpad 里记标记;没有 scratchpad 时每轮提醒),
+# HARD 拦一次,按 playbook §3 的时机权衡落盘交接;越线后再涨 REDELTA 再拦时要求立即落盘。
 # 拦截只发生在 stop_hook_active 为假时——为真说明上一轮已经拦过、Claude 正因此续跑,
 # 但它只在那一轮为真,用户下一条消息就重置,只靠它会变成硬线以上每轮都拦。故另把
 # 拦截时的水位记进 scratchpad,之后除非再涨 CONTEXT_REBLOCK_DELTA_PCT 个点(默认 5)
@@ -65,22 +66,36 @@ if not used:
     allow()
 
 pct = used * 100.0 / WINDOW
-if pct < WARN:
+sd = p.get("scratchpad_dir") or ""
+sd = sd if sd and os.path.isdir(sd) else ""
+
+if pct < WARN:                                 # 压缩后回落:清标记,再越线时照常提醒与拦截
+    for name in (".context-watermark-warned", ".context-watermark-last-block") if sd else ():
+        try:
+            os.remove(os.path.join(sd, name))
+        except Exception:
+            pass
     allow()
 
 if pct < HARD:
+    warned = os.path.join(sd, ".context-watermark-warned") if sd else ""
+    if warned and os.path.isfile(warned):
+        allow()
+    if warned:
+        try:
+            open(warned, "w").write("%.3f" % pct)
+        except Exception:
+            pass
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "Stop",
         "additionalContext": (
-            "主线程 context 已过提醒线。在下一个自然断点按 playbook §3 的交接格式落盘,"
-            "落完继续当前任务。"
+            "主线程 context 已过提醒线。不必现在写交接;不开预计会越过硬线的新工作块,"
+            "过硬线后按 playbook §3 的时机规则收尾。"
         )}}))
     sys.exit(0)
 
-mark = ""
-sd = p.get("scratchpad_dir") or ""
-if sd and os.path.isdir(sd):
-    mark = os.path.join(sd, ".context-watermark-last-block")
+mark = os.path.join(sd, ".context-watermark-last-block") if sd else ""
+reblock = False
 if mark and os.path.isfile(mark):
     try:
         prev = float(open(mark).read().strip())
@@ -88,16 +103,21 @@ if mark and os.path.isfile(mark):
         prev = 0.0
     if pct < prev + REDELTA:
         allow()
+    reblock = True
 if mark:
     try:
         open(mark, "w").write("%.3f" % pct)
     except Exception:
         pass
 
-print(json.dumps({"decision": "block", "reason": (
-    "主线程 context 已过硬线。停下之前先按 playbook §3 的交接格式落盘"
-    "(就近放在本任务的工作目录),写完告诉用户换新会话并给出起手指令,再停。"
-)}))
+if reblock:
+    reason = ("主线程 context 过硬线后又涨了 %g 个点。现在就按 playbook §3 落盘交接"
+              "(就近放在本任务的工作目录),把未完成的步骤写进 ③,并提示用户换新会话。" % REDELTA)
+else:
+    reason = ("主线程 context 已过硬线。剩下的事靠已有上下文能做完就做完;接下来要读新材料、"
+              "做新判断的大块工作时,先按 playbook §3 落盘交接(就近放在本任务的工作目录)"
+              "并提示用户换新会话。")
+print(json.dumps({"decision": "block", "reason": reason}))
 sys.exit(0)
 ' 2>/dev/null
 exit 0

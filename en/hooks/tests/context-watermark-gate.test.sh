@@ -16,6 +16,23 @@ mktranscript() {
   echo "$f"
 }
 
+# reason_has <描述> <yes|no> <子串> <输入JSON>:断言拦截理由含或不含某个子串
+reason_has() {
+  local desc="$1" want="$2" sub="$3" payload="$4" got
+  got=$(printf '%s' "$payload" | bash "$HOOK" 2>/dev/null | python3 -c '
+import json,sys
+sub=sys.argv[1]
+try: r=json.loads(sys.stdin.read() or "{}").get("reason","")
+except Exception: r=""
+print("yes" if sub in r else "no")
+' "$sub")
+  if [ "$got" = "$want" ]; then
+    PASS=$((PASS+1)); printf '  ✅ %-50s [%s]\n' "$desc" "$got"
+  else
+    FAIL=$((FAIL+1)); printf '  ❌ %-50s 期望=%s 实际=%s\n' "$desc" "$want" "$got"
+  fi
+}
+
 # check <期望 allow|warn|block> <描述> <输入JSON> [环境变量赋值...]
 check() {
   local want="$1" desc="$2" payload="$3"; shift 3
@@ -86,6 +103,26 @@ check block "水位再涨超过增量阈值才重新拦" \
   "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T_HIGHER\",\"scratchpad_dir\":\"$SP\"}"
 check block "无 scratchpad_dir 时退回每轮拦,不静默放行" \
   "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T_HARD\"}"
+
+SPR="$TMP/scratchpad-reblock"; mkdir -p "$SPR"
+reason_has "首次拦截只要求做到断点,不要求立即落盘" no "现在就" \
+  "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T_HARD\",\"scratchpad_dir\":\"$SPR\"}"
+reason_has "越线后再涨过阈值再拦时要求立即落盘" yes "现在就" \
+  "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T_HIGHER\",\"scratchpad_dir\":\"$SPR\"}"
+
+SPW="$TMP/scratchpad-warn"; mkdir -p "$SPW"
+check warn  "首次过提醒线提醒一次" \
+  "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T_WARN\",\"scratchpad_dir\":\"$SPW\"}"
+check allow "同一会话提醒线不再重复提醒" \
+  "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T_WARN\",\"scratchpad_dir\":\"$SPW\"}"
+check block "提醒过之后过硬线照样拦" \
+  "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T_HARD\",\"scratchpad_dir\":\"$SPW\"}"
+check allow "压缩后水位回落到提醒线以下" \
+  "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T_LOW\",\"scratchpad_dir\":\"$SPW\"}"
+check warn  "压缩后重新越过提醒线照常提醒" \
+  "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T_WARN\",\"scratchpad_dir\":\"$SPW\"}"
+check block "压缩后重新越过硬线照常拦" \
+  "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T_HARD\",\"scratchpad_dir\":\"$SPW\"}"
 
 echo "── 异常一律 fail-open ──"
 check allow "transcript 路径不存在" '{"hook_event_name":"Stop","transcript_path":"/nope/x.jsonl"}'
