@@ -384,7 +384,7 @@ def render_md(res):
     L.append("| Group | Installed into a fresh CLAUDE_CONFIG_DIR | Playbook location |")
     L.append("|---|---|---|")
     c = res.get("copy", "en")
-    L.append("| H | {c}/CLAUDE.md, {c}/hooks, {c}/skills, orchestrator-playbook.md, and the hooks block of {c}/settings.example.json | injected into the main thread by the SessionStart hook |".format(c=c))
+    L.append("| H | {c}/CLAUDE.md, {c}/hooks, {c}/skills, {c}/agents, orchestrator-playbook.md, and the hooks block of {c}/settings.example.json | injected into the main thread by the SessionStart hook |".format(c=c))
     L.append("| N | the same as H, but without the SessionStart hook registration | appended to the end of CLAUDE.md |")
     L.append("")
     L.append("Each run also uses a fresh HOME and an empty working directory outside any git repository, "

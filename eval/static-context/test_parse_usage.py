@@ -210,6 +210,7 @@ def test_playbook_delivered_needs_the_final_heading_in_model_bound_context(recor
 def test_render_md_names_the_installed_copy(work_dir, copy):
     md = render_md(aggregate(str(work_dir), "2.1.285", "claude-opus-5-5", 2, copy=copy))
     assert "%s/CLAUDE.md, %s/hooks" % (copy, copy) in md
+    assert "%s/skills, %s/agents, orchestrator-playbook.md" % (copy, copy) in md
     other = "zh" if copy == "en" else "en"
     assert "%s/CLAUDE.md" % other not in md
 
