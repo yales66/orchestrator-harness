@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | `retriever` subagent | `agents/retriever.md`, read-only lookup and extraction of what can be read straight off the evidence, at effort `medium`, including searches of session transcripts. An answer that would take a judgement comes back as facts with the open judgement named, and a search whose answer could sit anywhere in a repository is not its work. It creates a new file only at a path the brief names or under the system temp directory and does not change existing ones |
 | `implementer` subagent | `agents/implementer.md`, implementation whose design decisions the brief has fixed, at effort `medium` with every tool. It reports a decision the brief left open instead of settling it |
 | ADR 0008 | Why subagent effort is set per kind of dispatch, with the effort sweep's results |
+| ADR 0009 | Why read-only subagents create files only where the brief points and `retriever` leaves a judgement to the main thread; it supersedes the Limits of those two definitions in ADR 0008 |
 
 ### Changed
 

@@ -137,6 +137,7 @@ bash scripts/check-parity.sh
 | [ADR 0006：只在答案属于用户时才问用户](../docs/zh/adr/0006-ask-the-user-only-where-the-answer-is-theirs.md) | 智能体何时提问、何时直接做 |
 | [ADR 0007：交接时机在换会话与长上下文两头的代价之间权衡](../docs/zh/adr/0007-handoff-timing-weighs-switch-against-long-context.md) | 长会话何时交接 |
 | [ADR 0008：子智能体的推理强度按派发种类设定](../docs/zh/adr/0008-subagent-effort-per-kind-of-dispatch.md) | 每类派发跑在什么推理强度 |
+| [ADR 0009：只读子智能体只在派发说明指定处写文件，retriever 把判断留给主线程](../docs/zh/adr/0009-read-only-subagents-write-where-the-brief-points.md) | 只读子智能体能在哪里建文件，判断由谁来下 |
 | [评测：方法与局限](../docs/zh/evaluation.md) | 本框架主张什么、不主张什么，以及受控实验要花多少 |
 | [静态上下文测量](../eval/static-context/README.md) | 怎样运行这项测量，每组配置安装了什么 |
 | [钩子变异测试](../eval/hook-mutations/README.md) | 怎样用植入的缺陷衡量钩子测试，以及留出集 |

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. In effect since 1 October 2026. ADR 0006, in its row on a question about a fact, dispatched `researcher` to search session transcripts. Such a search now lands on `retriever` through the dispatch routing in section 2 of the playbook, and the rest of ADR 0006 stands.
+Accepted. In effect since 1 October 2026. ADR 0006, in its row on a question about a fact, dispatched `researcher` to search session transcripts. Such a search now lands on `retriever` through the dispatch routing in section 2 of the playbook, and the rest of ADR 0006 stands. The Limits of `researcher` and `retriever` in the decision table below are superseded by [ADR 0009](0009-read-only-subagents-write-where-the-brief-points.md).
 
 ## Context
 

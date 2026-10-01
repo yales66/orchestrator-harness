@@ -137,6 +137,7 @@ CI runs on every push and pull request. It runs the hook tests of both copies, 5
 | [ADR 0006: Ask the user only where the answer is theirs](docs/adr/0006-ask-the-user-only-where-the-answer-is-theirs.md) | When the agent asks and when it acts |
 | [ADR 0007: Handoff timing weighs a session switch against a longer context](docs/adr/0007-handoff-timing-weighs-switch-against-long-context.md) | When a long session hands off |
 | [ADR 0008: Subagent effort is set per kind of dispatch](docs/adr/0008-subagent-effort-per-kind-of-dispatch.md) | Which effort each kind of dispatch runs at |
+| [ADR 0009: Read-only subagents write only where the brief points, and retriever leaves judgements open](docs/adr/0009-read-only-subagents-write-where-the-brief-points.md) | Where read-only subagents may create files, and who makes a judgement |
 | [Evaluation: method and limits](docs/evaluation.md) | What the harness claims, what it does not, and what a controlled experiment would cost |
 | [Static context measurement](eval/static-context/README.md) | How to run the measurement and what each configuration installs |
 | [Hook mutation testing](eval/hook-mutations/README.md) | How injected defects measure the hook tests, and the held-out set |

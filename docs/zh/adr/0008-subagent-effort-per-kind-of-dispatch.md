@@ -2,7 +2,7 @@
 
 ## 状态
 
-已采纳，自 2026 年 10 月 1 日起生效。ADR 0006「关于事实的提问」一行把翻会话记录派给 `researcher`。这类检索现在按编排手册 §2 的派发路由落到 `retriever`，ADR 0006 其余内容不变。
+已采纳，自 2026 年 10 月 1 日起生效。ADR 0006「关于事实的提问」一行把翻会话记录派给 `researcher`。这类检索现在按编排手册 §2 的派发路由落到 `retriever`，ADR 0006 其余内容不变。下文决策表里 `researcher` 与 `retriever` 的「限制」两格已由 [ADR 0009](0009-read-only-subagents-write-where-the-brief-points.md) 取代。
 
 ## 背景
 
