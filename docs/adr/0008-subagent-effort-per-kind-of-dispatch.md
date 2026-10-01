@@ -6,7 +6,7 @@ Accepted. In effect since 1 October 2026. ADR 0006, in its row on a question abo
 
 ## Context
 
-Reasoning effort sets how much a subagent thinks before it acts, and with it the tokens and time a dispatch costs. The Agent tool takes no effort per call. Effort can be set only in the `effort` field of a subagent definition's frontmatter, and a definition without that field follows the session's effort, which for Opus 5.5 defaults to `medium` in the API. The effort a dispatch runs at therefore depends on which definition it goes to. Before this decision `researcher` was the only subagent definition and set no `effort`, so subagents followed the session's effort, which the author's sessions set to `high` for Opus 5.5. That is why the sweep takes `high` as its baseline.
+Reasoning effort sets how much a subagent thinks before it acts, and with it the tokens and time a dispatch costs. The Agent tool takes no effort per call. Per subagent, effort can be set only in the `effort` field of its definition's frontmatter, and a definition without that field follows the session's effort, which for Opus 5.5 is `medium` when nothing sets it. The effort a dispatch runs at therefore depends on which definition it goes to. Before this decision `researcher` was the only subagent definition and set no `effort`, so subagents followed the session's effort, which the author's sessions set to `high` for Opus 5.5. That is why the sweep takes `high` as its baseline.
 
 The effort sweep in `eval/effort-sweep` measured what `medium` costs against `high` on the same work. It replayed 20 real briefs from past sessions, 8 implementations with design decisions fixed by the brief, 6 read-only lookups and 6 read-only reviews or diagnoses that need judgement, each at both efforts on the commit it was written against. Each brief ran twice per effort on `claude-opus-5-5` between 30 September and 1 October 2026, 80 valid attempts in all.
 
@@ -45,7 +45,7 @@ The judgement tier rests on six cases, and its interval is too wide to decide ei
 
 `CLAUDE_CODE_EFFORT_LEVEL`, once set in the environment, overrides the `effort` field of all three definitions, so a user who sets it runs every subagent at that one effort.
 
-The routing text sits in the English playbook, which at 9,993 characters is close to the 10,000 beyond which Claude Code hands a SessionStart injection to the model only as a preview; the Chinese playbook, at about 3,960 characters, is far from it, so the limit binds only the English one. `scripts/check-parity.sh` fails at that length, so any further routing text there has to displace something else.
+The English playbook carries the routing text too, and at 9,993 characters it is close to the 10,000 beyond which Claude Code hands a SessionStart injection to the model only as a preview; the Chinese playbook, at about 3,960 characters, is far from it, so the limit binds only the English one. `scripts/check-parity.sh` fails at that length, so any further routing text there has to displace something else.
 
 ## Sources
 
@@ -53,9 +53,10 @@ The routing text sits in the English playbook, which at 9,993 characters is clos
 |---|---|
 | `eval/effort-sweep/README.md`, the Results section | The cases, the runs, the table, latency, cost and its split by token kind, and the handling of attempts cut short by a usage limit |
 | `eval/effort-sweep/run.py`, `cmd_summarize` | How the paired difference, its t interval and the per-case token ratio are computed |
-| `git show 46ade32 -- en/agents/` | Before this decision `researcher` was the only definition and set no `effort` |
+| `git show 65524d0:en/agents/researcher.md` | Before this decision `researcher` was the only definition and set no `effort` |
 | `eval/effort-sweep/README.md`, "How a case runs, and why this way" | The frontmatter `effort` overrides the session's effort, and `CLAUDE_CODE_EFFORT_LEVEL` overrides the frontmatter |
-| Commit `46ade32`, message body | The Agent tool takes no per-call effort; a definition without a pinned effort follows the session, and Opus 5.5 defaults to `medium` |
+| The Agent tool's input parameters in Claude Code 2.1.286 | The Agent tool has no parameter that sets effort per call |
+| `meta.effort_in_requests.main` in each attempt record of the effort sweep | A thread with no effort set sends `medium` in its requests |
 | `en/agents/researcher.md`, `en/agents/retriever.md`, `en/agents/implementer.md` | Each definition's effort, the work it takes, and the instructions to name an open judgement or report an open decision |
 | `en/orchestrator-playbook.md`, §2, the "Who" item | Routing by deliverable to Explore, haiku, `retriever`, `researcher`, `implementer` or opus |
 | `en/orchestrator-playbook.md`, §1, the paragraph on asking the user a fact | The search of session transcripts dispatched through §2 |

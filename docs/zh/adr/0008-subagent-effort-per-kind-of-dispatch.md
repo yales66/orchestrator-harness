@@ -6,7 +6,7 @@
 
 ## 背景
 
-推理强度决定子智能体动手之前想多少，也就决定一次派发花多少词元与时间。Agent 工具不能按次设推理强度，推理强度只能写在子智能体定义文件开头配置区里的 `effort` 字段；定义不写这个字段就跟随会话的推理强度，而 Opus 5.5 在接口上默认是 `medium`。所以一次派发跑在哪一档，取决于它派给了哪个定义。在本决策之前，子智能体定义只有 `researcher` 一份，它没写 `effort`，子智能体都跟随会话的推理强度，而作者的会话对 Opus 5.5 用的是 `high`。推理强度对比以 `high` 为基线，正是因为这一点。
+推理强度决定子智能体动手之前想多少，也就决定一次派发花多少词元与时间。Agent 工具不能按次设推理强度，就单个子智能体而言，推理强度只能写在它的定义文件开头配置区里的 `effort` 字段；定义不写这个字段就跟随会话的推理强度，而 Opus 5.5 在什么都没设时是 `medium`。所以一次派发跑在哪一档，取决于它派给了哪个定义。在本决策之前，子智能体定义只有 `researcher` 一份，它没写 `effort`，子智能体都跟随会话的推理强度，而作者的会话对 Opus 5.5 用的是 `high`。推理强度对比以 `high` 为基线，正是因为这一点。
 
 `eval/effort-sweep` 的推理强度对比测的是同样的活在 `medium` 与 `high` 下差多少。它取历史会话里 20 份真实的派发说明，其中 8 份是设计决定已由派发说明定死的实现，6 份是只读检索，6 份是需要判断的只读审查或诊断，每份都在它所基于的提交上分别以两档推理强度运行。模型为 `claude-opus-5-5`，每份派发说明每档跑 2 次，运行时间为 2026 年 9 月 30 日至 10 月 1 日，共 80 次有效运行。
 
@@ -45,7 +45,7 @@
 
 环境变量 `CLAUDE_CODE_EFFORT_LEVEL` 一旦设置，就会盖过三个定义里的 `effort` 字段，设了它的用户所有子智能体都跑在同一档。
 
-路由文字写在英文编排手册里。英文编排手册有 9,993 字符，已接近 10,000 字符，超过这个长度，Claude Code 只把会话启动时注入的内容以预览交给模型；中文编排手册约 3,960 字符，离上限还远，这个限制只落在英文版。`scripts/check-parity.sh` 在这个长度上报错，所以要在英文编排手册里再加路由文字，就得删掉别的内容。
+英文编排手册同样载有路由文字，它有 9,993 字符，已接近 10,000 字符，超过这个长度，Claude Code 只把会话启动时注入的内容以预览交给模型；中文编排手册约 3,960 字符，离上限还远，这个限制只落在英文版。`scripts/check-parity.sh` 在这个长度上报错，所以要在英文编排手册里再加路由文字，就得删掉别的内容。
 
 ## 出处
 
@@ -53,9 +53,10 @@
 |---|---|
 | `eval/effort-sweep/README.md` 的 Results 一节 | 用例、运行次数、结果表、耗时、花费及其按词元种类的拆分，以及撞上用量上限而中断的运行如何处理 |
 | `eval/effort-sweep/run.py` 的 `cmd_summarize` | 配对差、它的 t 区间与逐用例词元比的算法 |
-| `git show 46ade32 -- zh/agents/` | 本决策之前只有 `researcher` 一份定义，且没写 `effort` |
+| `git show 65524d0:zh/agents/researcher.md` | 本决策之前只有 `researcher` 一份定义，且没写 `effort` |
 | `eval/effort-sweep/README.md` 的「How a case runs, and why this way」一节 | 定义里的 `effort` 盖过会话的推理强度，`CLAUDE_CODE_EFFORT_LEVEL` 又盖过定义里的 `effort` |
-| 提交 `46ade32` 的说明正文 | Agent 工具不能按次设推理强度；定义不写推理强度就跟随会话，Opus 5.5 默认 `medium` |
+| Claude Code 2.1.286 中 Agent 工具的输入参数 | Agent 工具没有按次设置推理强度的参数 |
+| 推理强度对比每次运行记录的 `meta.effort_in_requests.main` | 未设推理强度的线程，其请求带的是 `medium` |
 | `zh/agents/researcher.md`、`zh/agents/retriever.md`、`zh/agents/implementer.md` | 各定义的推理强度、接的活，以及写明未下的判断、回报未定的决定这两条要求 |
 | `zh/orchestrator-playbook.md` §2「派给谁」一条 | 按交付物路由到 Explore、haiku、`retriever`、`researcher`、`implementer` 或 opus |
 | `zh/orchestrator-playbook.md` §1 关于问用户事实的一段 | 翻会话记录的检索按 §2 派出去 |

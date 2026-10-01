@@ -25,6 +25,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | `subagent-readonly-guard.sh` | Restricts `retriever` the same way as `researcher` |
 | Hook regression tests | Cases for the `retriever` restriction and for `implementer` passing the guard. The hook tests hold 501 cases per copy |
 | Static context measurement | Rerun with the three agent definitions on Claude Code 2.1.286 and claude-opus-5-5. Each subagent's first-request input is 10,230 tokens in H against 13,573 in N for the English copy, 3,343 fewer or about 25%, and 10,152 against 13,783 for the Chinese copy, 3,631 fewer or about 26% |
+| Fork replay runner | `--playbook FILE` replaces every playbook the recorded SessionStart hook injected into the session copy, including the rendered text a resume sends to the model, and the playbook in the config directory. A case's `cut_uuid` removes the earlier tasks before that prompt from the session copy. The reps of a case run back to back from a temp directory fixed per case and variant, so every rep after the first reads the request prefix from a prompt cache written at the 5-minute TTL. A dropped network connection is retried in place like an overload or a rate limit, five attempts within about three minutes. Replays run at effort `high` unless the eval config sets another, because the recorded sessions ran at `high` and claude-opus-5-5 falls back to `medium` when nothing sets it |
+| Effort sweep | Ran 20 briefs twice at each effort on claude-opus-5-5, with the results in its README and in ADR 0008. The runner reads the effort each request carried from the captured request bodies and fails an attempt whose subagent requests carried another effort as `effort_mismatch`, and it fails an attempt that a usage limit or another API error cut short as `rate_limited` or `api_error` |
+| Evaluation write-up | `docs/evaluation.md` and `docs/zh/evaluation.md` report the effort sweep's results |
+| Rules on missed asks | Shelved, with the reason in its README. Neither playbook arm routes work to `feature-sharding`, a skill the repository does not ship |
+| Gate follow-through | The stub hook's denial reads "PreToolUse hook：已记录，视同执行。" (recorded, treated as done) |
+| Architecture diagrams | The read-only guard box in all four diagrams covers `retriever` as well as `researcher` |
 
 ## [0.4.0] - 2026-09-30
 

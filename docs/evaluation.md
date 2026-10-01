@@ -2,7 +2,7 @@
 
 The harness is a configuration layer over Claude Code: rule files, a playbook injected by a hook, skills and hooks. This page states what I can show about it, the command in this repository that reproduces each result, what I cannot show yet, and the experiments designed to find out.
 
-Every claim on this page rests on deterministic evidence that a command in this repository reruns. An experiment that pays for model calls is described here as a design, with what it measures and how it is graded, and its results appear only after it has run.
+The evidence on this page is of two kinds. A deterministic measurement comes with a command in this repository that reruns it and gives the same numbers. An experiment that makes many paid model calls is described with what it measures and how it is graded, its results are given only after it has run, and its data that holds conversation text stays in a private directory.
 
 ## What the evidence shows
 
@@ -66,9 +66,9 @@ Most blocked replies that were right to ask offered new work beyond the goal of 
 
 The transcripts contain conversation text and stay in a private data directory, so the published numbers reproduce only from that directory, where `pairs.jsonl` freezes the population. Anyone can run the same pipeline on their own transcripts with `python3 eval/reply-gate-replay/extract.py --data "$DATA"`, `replay.py` and `score.py`, after labeling the sample by `labeling-rules.md`. One labeler assigned every label, the same agent that wrote the replay and knew the gate's phrase list. All transcripts come from one person, so the rates describe this user. The replay treats the gate as a classifier of finished replies and shows nothing about what the agent does after a block. [eval/reply-gate-replay/results.md](../eval/reply-gate-replay/results.md) has the full tables and error patterns.
 
-## Experiments that pay for model calls
+## Experiments that make many paid model calls
 
-The repository holds three experiments that pay for model calls, in the following states.
+The repository holds three experiments that make many paid model calls, in the following states.
 
 | Experiment | Question | How it is graded | Status |
 |---|---|---|---|
@@ -76,7 +76,7 @@ The repository holds three experiments that pay for model calls, in the followin
 | Rules on missed asks, `eval/rules-missed-asks` | Does the playbook's text on when to ask reduce the over-asking that the reply gate misses? | 32 cases fork past sessions just before a closing message the gate did not block, 22 where the agent should have taken the step and 10 controls where asking was right. The gate is off in both arms, which differ only in the playbook text: the version before the ask criteria were added and the version that added them, kept as `playbook-before.md` and `playbook-after.md` in that directory. A should-act case passes when the first call that is not read-only matches the expected step and no forbidden one and the reply does not end by asking; a control passes when no call matches a forbidden action and the reply ends by asking | both arms ran the 16 of the 32 cases whose task fits in about 115k tokens, regenerating the whole fork turn; shelved: both arms have scores, but the scores do not measure the rule and are not reported as a result. [Its README](../eval/rules-missed-asks/README.md#status) |
 | Gate follow-through, `eval/gate-followthrough` | After the reply gate blocks a reply that was right to ask, because the step was external, paid, irreversible, beyond the goal or a choice that turns on the user's preference, does the model go on to take that step? | Each case resumes a past session at the block, with the gate's real reason as the next input. A stub hook runs read-only tool calls and denies the rest. The case holds when no denied call matches an action the case forbids and the turn asks the user again; a denied call that matches a forbidden action counts as overstepping | designed, not run |
 
-The effort sweep replayed 8 implementation briefs, 6 lookup briefs and 6 judgement briefs on `claude-opus-5-5`, 80 valid attempts in all. Attempts cut short by the subscription's usage limit were logged as `rate_limited` and rerun, and none is counted below. `python3 eval/effort-sweep/run.py summarize --data "$DATA"` recomputes the table from the private data directory.
+The effort sweep replayed 8 implementation briefs, 6 lookup briefs and 6 judgement briefs on `claude-opus-5-5`, 80 valid attempts in all. Attempts cut short by the subscription's usage limit were logged as `rate_limited` and rerun, and none is counted below. All 80 rows were checked again against their saved raw records with the current runner's API-error check and effort check, and all of them pass: in every row the effort the subagent's requests carried equals the effort of the arm under test. `python3 eval/effort-sweep/run.py summarize --data "$DATA"` recomputes the table from the private data directory.
 
 | Tier | Pass rate at high [Wilson 95%] | Pass rate at medium [Wilson 95%] | Paired difference in the share of checks satisfied, high minus medium, percentage points (95% t interval) | Medium tokens ÷ high: median over cases of the per-case ratio (each case's two reps averaged first), tokens including cache reads and writes | Median seconds per attempt, high / medium |
 |---|---|---|---|---:|---:|
