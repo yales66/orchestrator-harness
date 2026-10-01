@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Implementation whose design decisions the brief has already fixed, with its file scope and self-verification spelled out.
+description: Implementation whose design decisions the brief has already fixed, with its file scope and self-verification spelled out. It edits files and runs commands. Work whose design is still open, or that needs a judgement the brief has not made, does not belong here.
 effort: medium
 ---
 

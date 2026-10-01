@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 | Component | What it provides |
 |---|---|
-| `retriever` subagent | `agents/retriever.md`, read-only lookup and extraction at effort `medium`, including searches of session transcripts. It may create new files and does not change existing ones |
+| `retriever` subagent | `agents/retriever.md`, read-only lookup and extraction of what can be read straight off the evidence, at effort `medium`, including searches of session transcripts. An answer that would take a judgement comes back as facts with the open judgement named, and a search whose answer could sit anywhere in a repository is not its work. It creates a new file only at a path the brief names or under the system temp directory and does not change existing ones |
 | `implementer` subagent | `agents/implementer.md`, implementation whose design decisions the brief has fixed, at effort `medium` with every tool. It reports a decision the brief left open instead of settling it |
 | ADR 0008 | Why subagent effort is set per kind of dispatch, with the effort sweep's results |
 
@@ -18,7 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 | Component | What changed |
 |---|---|
-| `researcher` subagent | Runs at effort `high`, and covers only read-only review, diagnosis, research and drafting that need judgement |
+| `researcher` subagent | Runs at effort `high`, covers only read-only review, diagnosis, research and drafting that need judgement, and creates a new file only at a path the brief names or under the system temp directory |
 | Playbook §1 and §2 | §2 routes each kind of dispatch to Explore, haiku, `retriever`, `researcher`, `implementer` or opus; §1 sends a search of session transcripts out through §2 instead of naming an agent; a read-only dispatch's output file must not be named `report*`, `summary*`, `findings*` or `analysis*`, which Claude Code 2.1.286 refuses to let a subagent write |
 | Playbook §1 | The row routing domain-model work to `domain-modeling` is gone; with the skill installed its own description triggers it |
 | `memory-audit` skill | The backup step no longer describes the author's own `~/.claude` layout |
