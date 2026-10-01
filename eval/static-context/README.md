@@ -24,16 +24,16 @@ Only comparable runs enter the comparison. After the planned runs finish, `pytho
 
 `SC_SETUP_ONLY=1 bash eval/static-context/run.sh` builds the two config directories without calling the API, which is useful for inspecting exactly what each group installs. `SC_COPY=zh` installs the Chinese copy instead of `en/` and writes `results.zh.json` and `results.zh.md`. `SC_MODEL`, `SC_REPEATS`, `SC_WORK`, `SC_MAX_INPUT` and `SC_RETRIES` override the model (a full model id naming opus, sonnet, haiku or fable), the repeat count, the log directory, the abort threshold and the number of rerun rounds.
 
-The numbers in `results.md` were measured on Claude Code 2.1.285 with `claude-opus-5-5` for both the main thread and the subagent. Claude Code's own system prompt and tool definitions change from version to version, so the absolute numbers hold only for 2.1.285, and another version needs a rerun of this script.
+The numbers in `results.md` were measured on Claude Code 2.1.286 with `claude-opus-5-5` for both the main thread and the subagent. Claude Code's own system prompt and tool definitions change from version to version, so the absolute numbers hold only for 2.1.286, and another version needs a rerun of this script.
 
 ## Results
 
 | Group | Main thread first-request input (tokens) | Subagent first-request input (tokens) |
 |---|---|---|
-| H | 20,318 | 10,186 |
-| N | 20,307 | 13,489 |
+| H | 20,606 | 10,230 |
+| N | 20,595 | 13,573 |
 
-The subagent's first-request input is 3,303 tokens lower in H, about 24%, because N's subagent loads the playbook with CLAUDE.md. The load checks in `results.md` find the full playbook in the context the main thread receives in both groups, and the two main threads differ by 11 tokens. The script reruns any run whose subagent model or deferred tool set makes it not comparable, and both runs of each group gave identical totals. The Chinese copy, measured with `SC_COPY=zh`, cuts the subagent's first-request input from 13,666 to 10,108 tokens, 3,558 fewer or about 26%, and both repeats of each group gave identical totals ([results.zh.md](results.zh.md)). The table reports the first repeat, and `bash eval/static-context/run.sh` reruns the whole measurement.
+The subagent's first-request input is 3,343 tokens lower in H, about 25%, because N's subagent loads the playbook with CLAUDE.md. The load checks in `results.md` find the full playbook in the context the main thread receives in both groups, and the two main threads differ by 11 tokens. The script reruns any run whose subagent model or deferred tool set makes it not comparable, and both runs of each group gave identical totals. The Chinese copy, measured with `SC_COPY=zh`, cuts the subagent's first-request input from 13,783 to 10,152 tokens, 3,631 fewer or about 26%, and both repeats of each group gave identical totals ([results.zh.md](results.zh.md)). The table reports the first repeat, and `bash eval/static-context/run.sh` reruns the whole measurement.
 
 ## Files
 

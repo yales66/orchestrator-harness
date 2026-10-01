@@ -17,23 +17,23 @@ A run counts as valid only when its subagent ran on the requested model and the 
 
 | Group | Run | Main input | Main cache write | Main cache read | Main total | Subagent input | Subagent cache write | Subagent cache read | Subagent total | Main model | Subagent model | Valid | Discarded attempts |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| H | 1 | 2 | 10091 | 10225 | 20318 | 2 | 10184 | 0 | 10186 | claude-opus-5-5 | claude-opus-5-5 | yes | 0 |
-| H | 2 | 2 | 10091 | 10225 | 20318 | 2 | 4250 | 5934 | 10186 | claude-opus-5-5 | claude-opus-5-5 | yes | 0 |
-| N | 1 | 2 | 10080 | 10225 | 20307 | 2 | 7553 | 5934 | 13489 | claude-opus-5-5 | claude-opus-5-5 | yes | 0 |
-| N | 2 | 2 | 10080 | 10225 | 20307 | 2 | 7553 | 5934 | 13489 | claude-opus-5-5 | claude-opus-5-5 | yes | 0 |
+| H | 1 | 2 | 10379 | 10225 | 20606 | 2 | 10228 | 0 | 10230 | claude-opus-5-5 | claude-opus-5-5 | yes | 0 |
+| H | 2 | 2 | 10379 | 10225 | 20606 | 2 | 4294 | 5934 | 10230 | claude-opus-5-5 | claude-opus-5-5 | yes | 0 |
+| N | 1 | 2 | 10368 | 10225 | 20595 | 2 | 7637 | 5934 | 13573 | claude-opus-5-5 | claude-opus-5-5 | yes | 0 |
+| N | 2 | 2 | 10368 | 10225 | 20595 | 2 | 7637 | 5934 | 13573 | claude-opus-5-5 | claude-opus-5-5 | yes | 0 |
 
 ## Repeat consistency (valid runs)
 
 | Group | Main totals | Subagent totals | Identical across valid runs |
 |---|---|---|---|
-| H | 20318, 20318 | 10186, 10186 | yes |
-| N | 20307, 20307 | 13489, 13489 | yes |
+| H | 20606, 20606 | 10230, 10230 | yes |
+| N | 20595, 20595 | 13573, 13573 | yes |
 
 ## Differences between groups (first valid run of each group, totals)
 
 | Comparison | Main thread | Subagent |
 |---|---|---|
-| N minus H | -11 | +3303 |
+| N minus H | -11 | +3343 |
 
 ## Load checks
 
@@ -41,16 +41,16 @@ A run counts as valid only when its subagent ran on the requested model and the 
 |---|---|---|---|---|---|---|
 | H | 1 | SessionStart, PreToolUse, Stop | yes | no | 2925 | yes |
 | H | 2 | SessionStart, PreToolUse, Stop | yes | no | 2925 | yes |
-| N | 1 | PreToolUse, Stop | yes | yes | 12914 | yes |
-| N | 2 | PreToolUse, Stop | yes | yes | 12914 | yes |
+| N | 1 | PreToolUse, Stop | yes | yes | 13027 | yes |
+| N | 2 | PreToolUse, Stop | yes | yes | 13027 | yes |
 
 ## Environment
 
 | Item | Value |
 |---|---|
-| Claude Code version | 2.1.285 |
+| Claude Code version | 2.1.286 |
 | Requested model (main thread and subagent) | claude-opus-5-5 |
-| Date (UTC) | 2026-09-30 |
+| Date (UTC) | 2026-10-01 |
 | Repeats per group | 2 |
 
 ## Rerun

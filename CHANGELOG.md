@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | `memory-audit` skill | The backup step no longer describes the author's own `~/.claude` layout |
 | `subagent-readonly-guard.sh` | Restricts `retriever` the same way as `researcher` |
 | Hook regression tests | Cases for the `retriever` restriction and for `implementer` passing the guard. The hook tests hold 501 cases per copy |
+| Static context measurement | Rerun with the three agent definitions on Claude Code 2.1.286 and claude-opus-5-5. Each subagent's first-request input is 10,230 tokens in H against 13,573 in N for the English copy, 3,343 fewer or about 25%, and 10,152 against 13,783 for the Chinese copy, 3,631 fewer or about 26% |
 
 ## [0.4.0] - 2026-09-30
 
