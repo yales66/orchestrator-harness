@@ -74,7 +74,31 @@ python3 eval/effort-sweep/run.py run --data "$DATA" --effort medium --reps 2
 python3 eval/effort-sweep/run.py summarize --data "$DATA"
 ```
 
-`summarize` prints, per tier and effort, the pass rate with a Wilson interval, the mean of `checks`, and the median and range of tokens per attempt, then the paired difference in `checks` between the efforts with a 95% interval and the median ratio of medium to high tokens. `--cases`, `--concurrency`, `--timeout-s`, `--max-budget-usd` and `--keep` narrow a run, bound it or keep its workspaces. `--inline-brief` is a fallback for a Claude Code version whose hooks cannot rewrite tool input; the main thread then copies the brief itself and the verbatim check catches any drift. The scripts use the Python standard library only.
+`summarize` prints, per tier and effort, the pass rate with a Wilson interval, the mean of `checks`, the median and range of tokens per attempt, the median output tokens and the median latency, then the paired difference in `checks` between the efforts with a 95% t interval on n − 1 degrees of freedom and the median over cases of the medium to high token ratio. For both paired figures each case's reps are averaged first, and tokens include cache reads and writes. `--cases`, `--concurrency`, `--timeout-s`, `--max-budget-usd` and `--keep` narrow a run, bound it or keep its workspaces. `--inline-brief` is a fallback for a Claude Code version whose hooks cannot rewrite tool input; the main thread then copies the brief itself and the verbatim check catches any drift. The scripts use the Python standard library only.
+
+## Results
+
+The sweep ran the 20 cases twice at each effort on `claude-opus-5-5` between 30 September and 1 October 2026, 80 valid attempts in all: 16 per effort for impl and 12 per effort for each read-only tier. Attempts cut short by the subscription's usage limit were written to `errors.jsonl` as `rate_limited` and run again, so none of them occupies a row. `python3 eval/effort-sweep/run.py summarize --data "$DATA"` prints the table below from the data directory.
+
+| Tier | Pass rate at high [Wilson 95%] | Pass rate at medium [Wilson 95%] | Paired difference in the share of `checks` satisfied, high minus medium, percentage points (95% t interval) | Medium tokens ÷ high: median over cases of the per-case ratio (each case's two reps averaged first), tokens including cache reads and writes | Median seconds per attempt, high / medium |
+|---|---|---|---|---:|---:|
+| impl | 88% [64%, 97%] | 88% [64%, 97%] | -1.0 (-3.5 to +1.4) | 0.54 | 394 / 269 |
+| lookup | 50% [25%, 75%] | 58% [32%, 81%] | -1.2 (-7.5 to +5.1) | 0.49 | 450 / 212 |
+| judgement | 50% [25%, 75%] | 42% [19%, 68%] | +2.0 (-14.7 to +18.7) | 0.42 | 407 / 240 |
+| all | 65% [50%, 78%] | 65% [50%, 78%] | -0.2 (-4.4 to +4.1) | 0.51 | 424 / 224 |
+
+`summarize` prints the paired difference as a share; the table gives it in percentage points. A negative paired difference means medium satisfied slightly more checks. An attempt passes only when every check holds, and the per-tier pass rates rest on 12 to 16 attempts, so their intervals overlap almost entirely and the paired difference in `checks` carries the comparison. For impl the interval's upper end puts any drop at medium at no more than about 1.4 points of checks, and for lookup at no more than about 5.1, at about half the tokens. For judgement the upper end reaches 18.7 points, so six cases cannot rule out a drop of about 19 points.
+
+Priced at API list rates from the recorded `usage`, the subagents' usage comes to $68.3 at high and $41.4 at medium: impl $21.5 against $14.0, lookup $27.0 against $16.7 and judgement $19.8 against $10.7. The runs themselves drew on a subscription's usage allowance. The cost ratio of about 0.6 sits above the token ratio of about 0.5 because a cache read is priced at a hundredth of an output token, and most of the tokens medium saves are cache reads. Summed over all attempts:
+
+| Effort | Cache reads | Cache writes | Output | Input |
+|---|---:|---:|---:|---:|
+| high | 110,969,304 | 4,133,727 | 1,269,603 | 2,626 |
+| medium | 55,865,893 | 2,841,555 | 801,064 | 1,746 |
+
+Medium halves the cache reads but keeps about two thirds of the cache writes and of the output, and those two carry two thirds or more of the cost at either effort.
+
+ADR 0008 (`docs/adr/0008-subagent-effort-per-kind-of-dispatch.md`) records the decision these results support: implementation with settled decisions and read-only lookup run at `medium`, and judgement-bound review and diagnosis stay at `high`. Judgement moves to `medium` only once a larger sample brings the upper end of its interval on the paired difference in checks, high minus medium, down to the level the other two tiers reached, about 5 percentage points.
 
 ## Files
 
@@ -88,10 +112,15 @@ python3 eval/effort-sweep/run.py summarize --data "$DATA"
 | test_grade.py | unit tests for the grader's pure functions |
 | test_exclude.py | unit tests for the case-set exclusions |
 | test_common.py | unit tests for the workspace location |
+| test_summarize.py | unit tests for the t interval on the paired difference |
+| test_api_failure.py | unit tests for failing an attempt that an API error or usage limit cut short |
+| test_bodies.py | unit tests for reading the effort each request carried from the captured request bodies |
 
 The data directory holds `cases.jsonl`, `inputs.html`, and after a run `_state.json`, `baseline/` and `v1/`.
 
 ## Limits
+
+Claude Code ends a turn it cannot complete, such as one refused by the subscription's usage limit, with a synthetic assistant message that a check on the served model alone does not catch. The runner's check for such attempts, which fails them as `rate_limited` or `api_error`, is in commit `3a066e4`.
 
 A clone holds one branch, so a brief that names another branch, such as the unmerged branch that the five rechecks of numbered defects in one repository compare against, or `origin/main`, finds nothing under that name, whereas the original subagent could read it. The runner still records in `meta.leak_signals` any tool call that touches the original checkout, lists history across all refs or names the landed commit, as a second line of defence.
 

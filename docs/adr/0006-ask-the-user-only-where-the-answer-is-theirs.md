@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. In effect since 29 September 2026.
+Accepted. In effect since 29 September 2026. Its choice of subagent for a search of session transcripts is superseded by [ADR 0008](0008-subagent-effort-per-kind-of-dispatch.md).
 
 ## Context
 

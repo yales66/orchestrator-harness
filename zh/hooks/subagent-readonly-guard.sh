@@ -1,12 +1,13 @@
 #!/bin/bash
-# PreToolUse(Edit|Write|NotebookEdit|MultiEdit|Bash) hook: researcher 子智能体只能新建文件。
+# PreToolUse(Edit|Write|NotebookEdit|MultiEdit|Bash) hook: researcher 与 retriever 子智能体只能新建文件。
 #
-# researcher 是只读调研、审查、取证、诊断类任务的自定义代理（agents/researcher.md）。
+# researcher 与 retriever 是只读派发的自定义代理：researcher 接需要判断的审查、诊断与调研
+# （agents/researcher.md），retriever 接只读检索与抽取（agents/retriever.md）。
 # 这类派发的产出是结论与修改建议，改已有文件的决定权留在主线程：调研者看到的只是
 # 任务切片，顺手改动会绕过编排者对文件范围的控制。新建报告文件不碰任何既有内容，放行。
 #
 # 判据要求 agent_id 存在：agent_id 只在 hook 从子智能体内触发时出现，
-# 用 --agent researcher 启动的会话主线程只带 agent_type，不受此限。
+# 用 --agent researcher 或 --agent retriever 启动的会话主线程只带 agent_type，不受此限。
 #
 # Edit/MultiEdit/NotebookEdit 一律拒绝；Write 只在目标已存在时拒绝。
 # Bash 同样能改文件，只拦 Edit/Write 等于留了后门。按 && || ; | 与换行拆成子命令逐段判断，
@@ -36,7 +37,7 @@ except Exception:
     sys.exit(0)
 if not isinstance(p, dict):
     sys.exit(0)
-if p.get("agent_type") != "researcher" or not str(p.get("agent_id") or "").strip():
+if p.get("agent_type") not in ("researcher", "retriever") or not str(p.get("agent_id") or "").strip():
     sys.exit(0)
 
 tool = p.get("tool_name")

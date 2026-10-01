@@ -547,6 +547,17 @@ def cmd_run(args) -> int:
     return 0
 
 
+# Two-sided 0.975 quantiles of Student's t for 1..30 degrees of freedom; the standard library has no t distribution,
+# and past 30 degrees of freedom the normal 1.96 understates t by at most about 4%.
+T975 = (12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228,
+        2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086,
+        2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042)
+
+
+def t975(df: int) -> float:
+    return T975[df - 1] if df <= len(T975) else 1.96
+
+
 def total_tokens(u: dict) -> int:
     return sum((u or {}).values())
 
@@ -600,7 +611,7 @@ def cmd_summarize(args) -> int:
                     tok_ratio.append(tm / th)
         if len(diffs) >= 2:
             mean = statistics.mean(diffs)
-            half = 1.96 * statistics.stdev(diffs) / len(diffs) ** 0.5
+            half = t975(len(diffs) - 1) * statistics.stdev(diffs) / len(diffs) ** 0.5
             print(f"  {tier:<9} cases={len(diffs):<3} checks diff {mean:+.3f} (95% CI {mean - half:+.3f} to {mean + half:+.3f}); "
                   f"medium tokens / high tokens, median {statistics.median(tok_ratio):.2f}")
     return 0

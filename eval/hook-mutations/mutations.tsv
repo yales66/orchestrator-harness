@@ -40,8 +40,8 @@ SG4	secret-guard.sh	safe_short = "cql" if rg else "cqlL"	safe_short = "cql"	grep
 SG5	secret-guard.sh	if ch in "ef":	if ch in "f":	grep -e supplies the pattern, so every positional is a file
 SG6	secret-guard.sh	VAR = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")	VAR = re.compile(r"\$\{?#?([A-Za-z_][A-Za-z0-9_]*)")	${#VAR} gives only the length and is not an expansion
 SG7	secret-guard.sh	inner = re.findall(r"\$\(([^()]*)\)", cmd) + re.findall(r"`([^`]*)`", cmd)	inner = []	command substitutions, also inside double quotes, are checked
-SR1	subagent-readonly-guard.sh	if p.get("agent_type") != "researcher" or not str(p.get("agent_id") or "").strip():	if not str(p.get("agent_id") or "").strip():	only the researcher agent type is restricted
-SR2	subagent-readonly-guard.sh	if p.get("agent_type") != "researcher" or not str(p.get("agent_id") or "").strip():	if p.get("agent_type") != "researcher":	agent_id must be present (--agent researcher main thread is not restricted)
+SR1	subagent-readonly-guard.sh	if p.get("agent_type") not in ("researcher", "retriever") or not str(p.get("agent_id") or "").strip():	if not str(p.get("agent_id") or "").strip():	only the researcher and retriever agent types are restricted
+SR2	subagent-readonly-guard.sh	if p.get("agent_type") not in ("researcher", "retriever") or not str(p.get("agent_id") or "").strip():	if p.get("agent_type") not in ("researcher", "retriever"):	agent_id must be present (--agent researcher or retriever main thread is not restricted)
 SR3	subagent-readonly-guard.sh	if isinstance(fp, str) and fp.strip() and exists(fp):	if isinstance(fp, str) and fp.strip():	Write is denied only when the target exists
 SR4	subagent-readonly-guard.sh	    return None if cwd is None else os.path.join(cwd, path)	    return path	relative paths resolve against the input cwd
 SR5	subagent-readonly-guard.sh	DEVICES = {"/dev/null", "/dev/stdout"	DEVICES = {"/dev/stdout"	redirecting to /dev/null is allowed

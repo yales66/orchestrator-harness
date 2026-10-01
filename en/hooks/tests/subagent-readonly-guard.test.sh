@@ -220,12 +220,21 @@ allow_cmd 'cd src && echo x > notes.md'
 allow_cmd '(cd src && ls); echo x > app.py'
 allow_cmd 'cd src | cat; echo x > app.py'
 
+echo "── retriever 子智能体: 与 researcher 同样只能新建文件 ──"
+check allow "retriever Write 新建报告"       "$(tool_json Write "$TMP/repo/reports/lookup.md" retriever a_10)"
+check deny  "retriever Write 覆盖已有文件"   "$(tool_json Write "$TMP/repo/src/app.py" retriever a_10)"
+check deny  "retriever Edit 已有文件"        "$(tool_json Edit "$TMP/repo/src/app.py" retriever a_10)"
+check deny  "retriever Bash 原地改写"        "$(bash_json 'sed -i s/1/2/ src/app.py' retriever a_10)"
+check allow "--agent retriever 会话的主线程（无 agent_id）" "$(tool_json Edit "$TMP/repo/src/app.py" retriever '')"
+
 echo "── 其他调用方一律放行 ──"
 check allow "主线程 Edit（无 agent_id、无 agent_type）" "$(tool_json Edit "$TMP/repo/src/app.py" '' '')"
 check allow "主线程 Write 覆盖"             "$(tool_json Write "$TMP/repo/src/app.py" '' '')"
 check allow "--agent researcher 会话的主线程（无 agent_id）" "$(tool_json Edit "$TMP/repo/src/app.py" researcher '')"
 check allow "其他子智能体 Edit"             "$(tool_json Edit "$TMP/repo/src/app.py" general-purpose a_02)"
 check allow "其他子智能体 Write 覆盖"       "$(tool_json Write "$TMP/repo/src/app.py" claude a_03)"
+check allow "implementer 子智能体 Edit"      "$(tool_json Edit "$TMP/repo/src/app.py" implementer a_11)"
+check allow "implementer 子智能体 Bash 覆盖写" "$(bash_json 'echo x > src/app.py' implementer a_11)"
 check allow "主线程 Bash 删文件"             "$(bash_json 'rm src/app.py' '' '')"
 check allow "--agent researcher 会话主线程 Bash" "$(bash_json 'git reset --hard' researcher '')"
 check allow "其他子智能体 Bash 覆盖写"      "$(bash_json 'echo x > src/app.py' general-purpose a_07)"

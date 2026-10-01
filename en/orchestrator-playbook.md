@@ -5,9 +5,9 @@
 First match wins:
 - Files you will edit next → read them yourself.
 - Work producing lots of tool output you won't revisit (research/review/extraction/diagnosis/drafting/repeated verification/screenshot QA/multi-round debugging/running scripts/batch jobs) → dispatch.
-- Implementation with judgement calls settled and six elements writable → dispatch; get back only the verification result.
+- Implementation with judgement calls settled and six elements writable → dispatch; get back only the verification.
 - Decisions (technology choice/planning/experiment design/thresholds/acceptance/topology) → yourself.
-- Anything else → do it yourself.
+- Anything else → yourself.
 
 ## 1. Task routing
 
@@ -17,7 +17,6 @@ First match wins:
 | Fork in direction | Branches yield substantively different results and the choice turns on preferences or constraints only the user knows → AskUserQuestion; otherwise take the recommended branch, naming it and why in your first sentence. Entangled tree of forks → grilling |
 | Multi-module change / new project / intent to parallelise | Plan it yourself and dispatch in parallel per §2; when it won't fit one session, split it into phases with a §3 handoff between them |
 | Bug | Reproduction test first, then fix (tdd-watch-it-fail); weird/intermittent/high-risk, or unfixed after 2 rounds → debug-root-cause. Locating by elimination: until a hypothesis is confirmed, dispatch each round's evidence gathering, keeping only the hypothesis tree and verdicts; from the confirming round, read the relevant files yourself and take over |
-| Changing/designing the domain model | domain-modeling |
 
 Next step at wrap-up within the user's current goal, undoable, not external and using no paid service → do it, then report. Undoable: editing git-tracked or backed-up files, pushing a personal branch, a draft PR with no reviewer. External: merging, deploying, sending messages or email, submitting applications or forms, publishing publicly, writing a shared database. Paid: metered model APIs, paid data sources, cloud resources; subagents don't count.
 
@@ -25,11 +24,11 @@ Whenever the user must decide (AskUserQuestion included), give each open item it
 
 A standing or conditional authorisation ("merge once CI passes", "don't ask for changes like this") holds for this session, covers only the objects and changes it named, not new scope, and ends when the user retracts it. To outlive the session it goes into project memory (feedback type, with scope and exceptions) and, at handoff, into ②.
 
-Before asking the user a fact (done? tested? remembered?), check the repo and git history; for session transcripts under `~/.claude/projects/`, dispatch a researcher. Ask only if nothing turns up, saying where you looked. A negative conclusion (doesn't exist, can't be done, no precedent) or time-sensitive fact (prices, quotas, policies, versions) carries a source and date retrieved this round, else is marked "unverified".
+Before asking the user a fact (done? tested? remembered?), check the repo and git history; for session transcripts under `~/.claude/projects/`, dispatch the search. Ask only if nothing turns up, saying where you looked. A negative conclusion (doesn't exist, can't be done, no precedent) or time-sensitive fact (prices, quotas, policies, versions) carries a source and date retrieved this round, else is marked "unverified".
 
 ## 2. Subagent dispatch
 
-Who (always set the model): open-ended repo-wide location → Explore(haiku); purely mechanical batch work (finding files/running scripts/scanning) → haiku fan-out; read-only work needing only a conclusion (research/review/extraction/drafting/diagnosis, web included) → `researcher` (opus); everything else → opus.
+Who (always set the model): open-ended repo-wide location → Explore(haiku); purely mechanical batch work (finding files/running scripts/scanning) → haiku fan-out; lookup/extraction, session transcripts and web included → `retriever`; read-only review/diagnosis/research/drafting needing judgement, web included → `researcher`; implementation with judgement settled → `implementer`; these three and the rest on opus.
 
 - Read-only dispatch: bounded deliverable (one judgement/command/yes-or-no + evidence; stop once answered). Asks with no stopping point ("list all/rank/pair every item") → cap (the single most likely one + why) or split. When splitting, a step depending on an earlier step's conclusion stays in that dispatch; parallel writing dispatches never share files.
 - Writing dispatch into your working tree: its prompt hard-codes git read-only (log/blame/show/diff/status), no reset/`checkout --`/restore/stash/clean/switch, no committing; you commit after each dispatch round. If the subagent should commit, use `isolation:"worktree"` and you merge.
@@ -39,7 +38,7 @@ Who (always set the model): open-ended repo-wide location → Explore(haiku); pu
 Writing type needs all of 1–6; read-only type needs 1, 2, 3, 6; otherwise don't dispatch.
 
 1. Goal: one-sentence task + objective test of "done"
-2. File scope: exact paths that may be modified; read-only references listed separately with line ranges; a read-only dispatch writing full findings to disk also gets a new output file path
+2. File scope: exact paths that may be modified; read-only references listed separately with line ranges; a read-only dispatch writing full findings to disk also gets a new output file path (no report*/summary*/findings*/analysis* name: Claude Code 2.1.286 blocks those)
 3. Known context: confirmed facts (interface signatures/data structures/pitfalls/technical decisions) in the prompt; large decisions on disk as a contract, passed by path; no whole files, the subagent reads them
 4. Constraints: files and dependencies not to touch, existing patterns to reuse (named files)
 5. Self-verification: commands to run before delivery + expected result (e.g. `npx vitest run <file>` all green)
