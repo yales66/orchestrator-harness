@@ -17,17 +17,17 @@ A run counts as valid only when its subagent ran on the requested model and the 
 
 | Group | Run | Main input | Main cache write | Main cache read | Main total | Subagent input | Subagent cache write | Subagent cache read | Subagent total | Main model | Subagent model | Valid | Discarded attempts |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| H | 1 | 2 | 10300 | 10225 | 20527 | 2 | 10188 | 0 | 10190 | claude-opus-5-5 | claude-opus-5-5 | yes | 0 |
-| H | 2 | 2 | 10300 | 10225 | 20527 | 2 | 4254 | 5934 | 10190 | claude-opus-5-5 | claude-opus-5-5 | yes | 0 |
-| N | 1 | 2 | 10289 | 10225 | 20516 | 2 | 7597 | 5934 | 13533 | claude-opus-5-5 | claude-opus-5-5 | yes | 0 |
-| N | 2 | 2 | 10289 | 10225 | 20516 | 2 | 7597 | 5934 | 13533 | claude-opus-5-5 | claude-opus-5-5 | yes | 0 |
+| H | 1 | 2 | 10422 | 10225 | 20649 | 2 | 10184 | 0 | 10186 | claude-opus-5-5 | claude-opus-5-5 | yes | 0 |
+| H | 2 | 2 | 10422 | 10225 | 20649 | 2 | 4250 | 5934 | 10186 | claude-opus-5-5 | claude-opus-5-5 | yes | 0 |
+| N | 1 | 2 | 10411 | 10225 | 20638 | 2 | 7593 | 5934 | 13529 | claude-opus-5-5 | claude-opus-5-5 | yes | 0 |
+| N | 2 | 2 | 10411 | 10225 | 20638 | 2 | 7593 | 5934 | 13529 | claude-opus-5-5 | claude-opus-5-5 | yes | 0 |
 
 ## Repeat consistency (valid runs)
 
 | Group | Main totals | Subagent totals | Identical across valid runs |
 |---|---|---|---|
-| H | 20527, 20527 | 10190, 10190 | yes |
-| N | 20516, 20516 | 13533, 13533 | yes |
+| H | 20649, 20649 | 10186, 10186 | yes |
+| N | 20638, 20638 | 13529, 13529 | yes |
 
 ## Differences between groups (first valid run of each group, totals)
 
