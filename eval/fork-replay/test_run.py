@@ -250,3 +250,94 @@ def test_network_and_overload_errors_are_retried_in_place(msg, want):
 def test_default_backoff_stays_inside_the_five_minute_cache():
     r = run.DEFAULT_CFG["retry"]
     assert sum(r["base_s"] * 2 ** k * 1.5 for k in range(r["attempts"] - 1)) < 300
+
+
+def _msg(kind, **fields):
+    return type(kind, (), fields)()
+
+
+@pytest.mark.parametrize("messages, want", [
+    ([_msg("AssistantMessage", model="claude-opus-5-5", error=None), _msg("ResultMessage", api_error_status=None)],
+     None),
+    ([_msg("ResultMessage", api_error_status=429)], "rate_limited"),
+    ([_msg("RateLimitEvent", rate_limit_info=_msg("RateLimitInfo", status="rejected"))], "rate_limited"),
+    ([_msg("RateLimitEvent", rate_limit_info=_msg("RateLimitInfo", status="allowed_warning"))], None),
+    ([_msg("AssistantMessage", model="<synthetic>", error="rate_limit")], "rate_limited"),
+    ([_msg("AssistantMessage", model="<synthetic>", error="server_error")], "api_error"),
+], ids=["clean", "result-429", "event-rejected", "event-warning", "synthetic-rate-limit", "synthetic-server-error"])
+def test_api_failure_names_what_cut_the_attempt_short(messages, want):
+    assert run.api_failure(messages) == want
+
+
+def test_a_rate_limited_attempt_stops_every_attempt_not_yet_started():
+    import asyncio
+    started = []
+
+    async def fake(c, k):
+        started.append((c["id"], k))
+        return run.STOP if c["id"] == "c1" else None
+
+    todo = [({"id": "c1"}, 0), ({"id": "c1"}, 1), ({"id": "c2"}, 0), ({"id": "c3"}, 0)]
+    asyncio.run(run.run_groups(todo, fake, concurrency=1))
+    assert started == [("c1", 0)]
+
+
+def test_approve_harness_records_the_approval_and_runs_nothing(tmp_path, monkeypatch):
+    import asyncio
+    case_line = {"id": "c1", "source_session": str(tmp_path / "s.jsonl"), "fork_mode": "after", "fork_uuid": "u",
+                 "resume_input": "go", "cwd_repo": None, "label": "x", "forbidden": [], "expected": "ask", "tags": []}
+    (tmp_path / "cases.jsonl").write_text(json.dumps(case_line) + "\n")
+    (tmp_path / "grader.py").write_text("def grade(case, traj, cfg=None):\n    return {'grade': {}}\n")
+    (tmp_path / "eval.json").write_text("{}")
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "x")
+
+    async def must_not_run(*a, **k):
+        raise AssertionError("approving the harness started a run")
+
+    monkeypatch.setattr(run, "run_groups", must_not_run)
+    args = run.parse_args(["--cases", str(tmp_path / "cases.jsonl"), "--flow", str(tmp_path / "flow"),
+                           "--config", str(REPO_EN), "--grader", str(tmp_path / "grader.py"),
+                           "--eval-config", str(tmp_path / "eval.json"), "--approve-harness"])
+    asyncio.run(run.main_async(args))
+    assert "baseline" in json.load(open(tmp_path / "flow" / "_harness.json"))["variants"]
+
+
+REPO_ZH = Path(__file__).resolve().parents[2] / "zh"
+
+
+@pytest.mark.parametrize("text, blocked", [
+    ("改好了，测试全绿。要我顺手把文档也更新吗？", True),
+    ("改好了，测试全绿。", False),
+], ids=["closing-offer", "plain-report"])
+def test_gate_block_runs_the_real_reply_gate(text, blocked):
+    reason = run.gate_block(str(REPO_ZH / "hooks" / "reply-gate.sh"), {"REPLY_LANG": "zh"}, text)
+    assert bool(reason) is blocked
+
+
+def test_gate_resume_text_matches_what_claude_code_records_for_a_stop_block():
+    assert run.gate_resume_text("R", "bash g.sh") == (
+        "Stop hook feedback:\nR\n\n<system-reminder>\nStop hook blocking error from command: \"bash g.sh\": R\n"
+        "</system-reminder>")
+
+
+def test_gate_command_is_the_stop_hook_registered_in_the_config_under_test():
+    assert run.gate_command(str(REPO_ZH), "reply-gate.sh") == "REPLY_LANG=zh bash $HOME/.claude/hooks/reply-gate.sh"
+
+
+@pytest.mark.parametrize("calls, stop, want", [
+    ([{"decision": "allow"}], "end_turn", True),
+    ([], "end_turn", True),
+    ([{"decision": "allow"}, {"decision": "deny"}], "tool_use", False),
+    ([], "max_tokens", False),
+], ids=["reads-then-end", "end", "denied", "cut-off"])
+def test_the_gate_runs_only_when_the_turn_ended(calls, stop, want):
+    assert run.turn_ended(calls, stop) is want
+
+
+@pytest.mark.parametrize("command, env", [
+    ("REPLY_LANG=zh bash $HOME/.claude/hooks/reply-gate.sh", {"REPLY_LANG": "zh"}),
+    ("A=1 B=two bash g.sh", {"A": "1", "B": "two"}),
+    ("bash g.sh", {}),
+], ids=["zh", "two", "none"])
+def test_gate_env_is_the_assignments_before_the_hook_command(command, env):
+    assert run.gate_env(command) == env

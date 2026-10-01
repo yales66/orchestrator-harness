@@ -21,6 +21,8 @@ The two fork modes differ only in step 4:
 | after | up to and including `fork_uuid` | `resume_input`, sent as one user message |
 | before | up to the record before the user prompt that opened the `fork_uuid` turn | that prompt, re-sent, so the whole turn is generated afresh |
 
+With `--offline-gate HOOK`, a replay that ends its turn with every call run as a read is shown to a Stop hook offline, the way Claude Code would run it with the eval's own Stop hooks dropped. The hook gets the closing reply as `last_assistant_message`, with the `VAR=value` prefix of the command the configuration under test registers for it. When it blocks, the runner resumes the replay's own session once, without forking, with the block written the way Claude Code records it (the `Stop hook feedback:` message and the blocking-error reminder), and grades that continuation separately under the row's `gate` field. One continuation is all a real session gets, because the hook lets the next stop through.
+
 In before mode, a decision that came after tool calls in the same turn is regenerated together with those calls; the result row records how many assistant records were rewound.
 
 The SDK rebuilds the system prompt on every request only when asked to; the runner passes `system_prompt={"type": "preset", "preset": "claude_code", "snapshot": False}` by default so the configuration under test, not the snapshot recorded in the transcript, supplies it. `verbatim_prompts` is on by default, so the resume input is delivered as written, without `@path` expansion, slash-command dispatch or the attachments Claude Code adds to a typed prompt. Replays run at effort `high` (`sdk.effort`), the level the recorded sessions ran at; neither installed configuration sets it, and `claude-opus-5-5` would otherwise run at its default, `medium`.
@@ -61,11 +63,11 @@ Results are written under `<flow>/<variant>/`, with these files and row fields:
 |---|---|
 | results.jsonl | one row per (case, rep): `prompt_id`, `rep`, `prompt`, `tags`, `stop_reason`, `status` (`ok`, or `truncated` when the run hit max tokens, max turns or the budget), `grade`, `explanation`, `model` as served, `usage`, `latency_s`, `tool_calls`, `trace` and `meta` (grader outcome, first non-read-only call, attempts, turns, cost reported by the SDK, forked session id) |
 | traces/<id>_rep<k>.json | the continuation as `{role, content}` turns: the resume input, assistant text, tool calls and tool results |
-| errors.jsonl | one row per failed attempt with a failure class: `timeout`, `harness-or-serving`, `served-model-mismatch` or `grader-error` |
+| errors.jsonl | one row per failed attempt with a failure class: `timeout`, `harness-or-serving`, `rate_limited`, `api_error`, `served-model-mismatch` or `grader-error`; after a `rate_limited` attempt no further attempt starts, and rerunning the same command once the limit resets picks up where the run stopped |
 
 Each attempt's temp directory is fixed per case and variant (`fr-<first 12 characters of the case id>-<variant>` under the system temp directory), and the reps of one case run one after another. The path reaches the system prompt and the CLAUDE.md reminder, so a fixed one keeps the request prefix byte-identical across reps, and every rep after the first reads it from the prompt cache instead of writing it again. A case holds its concurrency slot until its last rep ends, so no other attempt runs in between, and the runner has Claude Code write the cache at the 5-minute TTL (`sdk.cache_ttl`, through `FORCE_PROMPT_CACHING_5M`), which costs 5/8 of the 1-hour write Claude Code uses by default; every request refreshes the TTL, so it does not lapse between back-to-back reps. Resume is idempotent at the (case, rep) key: rerunning the same command skips rows already in `results.jsonl`. Each attempt has a hard wall-clock ceiling (`--timeout-s`); errors whose message looks like an overload, a rate limit or a dropped network connection are retried in place with jittered exponential backoff, five attempts within about three minutes, so a case's cached prefix is still live when the retry starts, and every attempt is recorded. A response served by a model other than the requested one fails the attempt.
 
-A real run refuses to start until the harness has been approved: the runner hashes itself, the stub, `casekit.py`, the grader, the eval config, the cases file, the configuration under test and any `harness_paths` listed in `<flow>/_state.json`, plus the `--playbook` file when one is given, and exits with code 2 when the hash differs from the one the last `--approve-harness` run recorded for the same `--variant`. Each variant is approved on its own, because arms of one flow may run under different playbooks. Approving is the user's decision.
+A real run refuses to start until the harness has been approved: the runner hashes itself, the stub, `casekit.py`, the grader, the eval config, the cases file, the configuration under test and any `harness_paths` listed in `<flow>/_state.json`, plus the `--playbook` file when one is given, and exits with code 2 when the hash differs from the one the last `--approve-harness` run recorded for the same `--variant`. `--approve-harness` only records the hash and exits; the run is the next command. Each variant is approved on its own, because arms of one flow may run under different playbooks. Approving is the user's decision.
 
 ## Running
 
@@ -82,7 +84,8 @@ A fresh `CLAUDE_CONFIG_DIR` cannot see the keychain login, so export `CLAUDE_COD
 PY=~/.venvs/fork-replay/bin/python
 $PY eval/fork-replay/run.py --cases "$DATA/cases.jsonl" --flow "$DATA" --config en \
     --grader eval/<eval>/grade.py --eval-config eval/<eval>/config.json --dry-run
-$PY eval/fork-replay/run.py ... --approve-harness --only <one id>     # first real run, after review
+$PY eval/fork-replay/run.py ... --approve-harness                    # records the approval, runs nothing
+$PY eval/fork-replay/run.py ... --only <one id>                       # first real run, after review
 $PY eval/fork-replay/run.py ... --reps 2 --concurrency 3
 ```
 

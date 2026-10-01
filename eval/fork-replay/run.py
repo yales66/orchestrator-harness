@@ -394,6 +394,8 @@ def check_harness(args, flow):
     paths += [os.path.join(flow, p) for p in state.get("harness_paths", [])]
     if args.playbook:
         paths.append(os.path.abspath(args.playbook))
+    if args.offline_gate:
+        paths.append(os.path.abspath(args.offline_gate))
     sha = harness_fingerprint(paths)
     # Kept per variant, because arms of one flow may differ in what they run under,
     # such as the playbook, and each arm is approved on its own.
@@ -511,12 +513,95 @@ async def attempt(case, rep, cfg, args):
         traj, trace = to_trajectory_and_trace(prompt, messages, calls)
         result = next((m for m in reversed(messages) if type(m).__name__ == "ResultMessage"), None)
         models = {m.model for m in messages if type(m).__name__ == "AssistantMessage" and getattr(m, "model", None)}
-        return {"traj": traj, "trace": trace, "result": result, "models": sorted(models),
-                "latency_s": round(latency, 2), "rewound": rewound, "calls": calls}
+        out = {"traj": traj, "trace": trace, "result": result, "models": sorted(models),
+               "failure": api_failure(messages),
+               "latency_s": round(latency, 2), "rewound": rewound, "calls": calls}
+        if args.offline_gate and not out["failure"] and result is not None and turn_ended(
+                calls, getattr(result, "stop_reason", None)):
+            out["gate"] = await gate_followup(args, cfgdir, opts, result, traj, log, len(calls))
+        return out
     finally:
         remove_worktree(case, wt)
         if not args.keep:
             shutil.rmtree(root, ignore_errors=True)
+
+
+# ---------------------------------------------------------------- offline gate
+
+def turn_ended(calls, stop):
+    """The model ended its turn with every call it made run as a read: a Stop would fire."""
+    return stop == "end_turn" and all(c.get("decision") == "allow" for c in calls)
+
+
+def gate_command(config_tree, name):
+    """The Stop hook command naming `name` as the configuration under test registers it."""
+    for fn in ("settings.json", "settings.example.json"):
+        p = os.path.join(config_tree, fn)
+        if not os.path.exists(p):
+            continue
+        for group in json.load(open(p, encoding="utf-8")).get("hooks", {}).get("Stop", []):
+            for h in group.get("hooks", []):
+                if name in h.get("command", ""):
+                    return h["command"]
+    return None
+
+
+def gate_env(command):
+    """The VAR=value assignments that prefix a registered hook command."""
+    env = {}
+    for word in command.split():
+        m = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)=(.*)", word)
+        if not m:
+            break
+        env[m.group(1)] = m.group(2)
+    return env
+
+
+def gate_block(hook, env, text):
+    """The hook's block reason for a reply ending the turn, or None when it lets the reply stand."""
+    payload = json.dumps({"hook_event_name": "Stop", "stop_hook_active": False,
+                          "last_assistant_message": text})
+    proc = subprocess.run(["bash", hook], input=payload, capture_output=True, text=True,
+                          env={**os.environ, **env}, timeout=30)
+    try:
+        out = json.loads(proc.stdout.strip() or "{}")
+    except ValueError:
+        return None
+    return out.get("reason") if out.get("decision") == "block" else None
+
+
+def gate_resume_text(reason, command):
+    """A Stop-hook block as Claude Code records it: the feedback message, then the reminder."""
+    return (f"Stop hook feedback:\n{reason}\n\n"
+            f"<system-reminder>\nStop hook blocking error from command: \"{command}\": {reason}\n</system-reminder>")
+
+
+async def gate_followup(args, cfgdir, opts, result, traj, log, n_calls):
+    """Run the gate on the closing reply and, when it blocks, continue the replay once.
+
+    The continuation resumes the replay's own session, so it reads the prefix from the
+    cache the first part just wrote. The hook allows the next stop (stop_hook_active),
+    so one continuation is all a real session would get.
+    """
+    import dataclasses
+    from claude_agent_sdk import query
+    command = gate_command(args.config, os.path.basename(args.offline_gate)) or f"bash {args.offline_gate}"
+    reason = gate_block(args.offline_gate, gate_env(command), traj["final_text"])
+    if not reason:
+        return {"fired": False}
+    prompt = gate_resume_text(reason, command)
+    opts2 = dataclasses.replace(opts, resume=getattr(result, "session_id", None), resume_session_at=None,
+                                fork_session=False)
+    messages = []
+    async for m in query(prompt=prompt, options=opts2):
+        messages.append(m)
+    calls = read_calls(log)[n_calls:]
+    traj2, trace2 = to_trajectory_and_trace(prompt, messages, calls)
+    res2 = next((m for m in reversed(messages) if type(m).__name__ == "ResultMessage"), None)
+    return {"fired": True, "reason": reason, "traj": traj2, "trace": trace2, "result": res2,
+            "failure": api_failure(messages),
+            "models": sorted({m.model for m in messages if type(m).__name__ == "AssistantMessage"
+                              and getattr(m, "model", None)})}
 
 
 # ---------------------------------------------------------------- run loop
@@ -540,18 +625,46 @@ def usage_dict(result):
     return {k: int(u.get(k, 0) or 0) for k in keys}
 
 
+STOP = "stop"  # returned by an attempt after which no further attempt should start
+
+
+def api_failure(messages):
+    """rate_limited or api_error when an API error cut the attempt short, else None.
+
+    Claude Code ends a turn it cannot complete with a `<synthetic>` assistant message
+    carrying the error; a usage limit also shows as a 429 on the result or a rejected
+    rate-limit event. Without this check such an attempt would be graded as a reply.
+    """
+    kinds = [(type(m).__name__, m) for m in messages]
+    errors = [getattr(m, "error", None) for k, m in kinds if k == "AssistantMessage"]
+    limited = (any(k == "ResultMessage" and getattr(m, "api_error_status", None) == 429 for k, m in kinds)
+               or any(k == "RateLimitEvent" and getattr(getattr(m, "rate_limit_info", None), "status", None)
+                      == "rejected" for k, m in kinds)
+               or "rate_limit" in errors)
+    if limited:
+        return "rate_limited"
+    return "api_error" if any(errors) else None
+
+
 async def run_groups(todo, run, concurrency):
     """Run (case, rep) pairs, reps of a case in order and holding one slot throughout.
 
     Holding the slot keeps a case's reps back to back, so no other case's attempt
     runs between them and the prefix cache written by the first rep is still live.
+    An attempt that returns STOP (a usage limit) keeps every later attempt from starting;
+    the run resumes from results.jsonl once the limit resets.
     """
     sem = asyncio.Semaphore(concurrency)
+    stopped = []
 
     async def one_case(group):
         async with sem:
             for c, k in group:
-                await run(c, k)
+                if stopped:
+                    return
+                if await run(c, k) == STOP:
+                    stopped.append((c["id"], k))
+                    return
 
     await asyncio.gather(*(one_case(g) for g in group_reps(todo)))
 
@@ -581,6 +694,13 @@ async def run_one(case, rep, cfg, args, grader, out, lock):
             print(json.dumps({"id": case["id"], **r}, ensure_ascii=False, indent=2))
             return
         res = r["result"]
+        if r.get("failure"):
+            append(out["errors"], {**err_row, "failure_class": r["failure"], "model": r["models"],
+                                   "usage": usage_dict(res)}, lock)
+            if r["failure"] == "rate_limited":
+                print(f"usage limit reached at {case['id']} rep {rep}; no further attempts start", file=sys.stderr)
+                return STOP
+            return
         served_ok = all(m.startswith(args.model) for m in r["models"])
         if not served_ok:
             append(out["errors"], {**err_row, "failure_class": "served-model-mismatch",
@@ -595,6 +715,15 @@ async def run_one(case, rep, cfg, args, grader, out, lock):
         subtype = getattr(res, "subtype", None)
         stop = getattr(res, "stop_reason", None) or subtype
         status = "truncated" if stop in ("max_tokens", "error_max_turns", "error_max_budget_usd") else "ok"
+        gate = r.get("gate")
+        if gate and gate["fired"]:
+            gate_rel = f"traces/{case['id']}_rep{rep}.gate.json"
+            json.dump(gate["trace"], open(os.path.join(out["dir"], gate_rel), "w", encoding="utf-8"),
+                      ensure_ascii=False, indent=1)
+            g2 = None if gate["failure"] else grader.grade(case, gate["traj"], cfg)
+            gate = {"fired": True, "reason": gate["reason"], "grade": g2 and g2["grade"],
+                    "failure": gate["failure"], "model": gate["models"], "usage": usage_dict(gate["result"]),
+                    "stop_reason": getattr(gate["result"], "stop_reason", None), "trace": gate_rel}
         trace_rel = f"traces/{case['id']}_rep{rep}.json"
         json.dump(r["trace"], open(os.path.join(out["dir"], trace_rel), "w", encoding="utf-8"),
                   ensure_ascii=False, indent=1)
@@ -608,8 +737,10 @@ async def run_one(case, rep, cfg, args, grader, out, lock):
                      "attempts": k, "num_turns": getattr(res, "num_turns", None),
                      "reported_cost_usd": getattr(res, "total_cost_usd", None),
                      "fork_session_id": getattr(res, "session_id", None),
+                     "terminal_reason": getattr(res, "terminal_reason", None),
                      "rewound_assistant_records": r["rewound"], "fork_mode": case["fork_mode"]},
             "trace": trace_rel,
+            **({"gate": gate} if args.offline_gate else {}),
         }, lock)
         return
 
@@ -649,6 +780,9 @@ async def main_async(args):
         if not (os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or os.environ.get("ANTHROPIC_API_KEY")):
             sys.exit("no credentials: export CLAUDE_CODE_OAUTH_TOKEN (claude setup-token) or ANTHROPIC_API_KEY")
         check_harness(args, flow)
+        if args.approve_harness:  # approving is its own step; the run is a separate command
+            print(f"approved the harness for {args.variant}; rerun without --approve-harness to start")
+            return
     done = set()
     if os.path.exists(out["results"]):
         done = {(r["prompt_id"], r["rep"]) for r in map(json.loads, open(out["results"], encoding="utf-8"))}
@@ -681,6 +815,9 @@ def parse_args(argv=None):
                     help="where a case without a restorable repository runs: an empty temp dir, or its original directory as it is today")
     ap.add_argument("--playbook",
                     help="orchestrator playbook under test: replaces the playbook injected into every session copy and the config's copy")
+    ap.add_argument("--offline-gate", metavar="HOOK",
+                    help="Stop hook to run on a reply that ends the turn; when it blocks, the replay continues "
+                         "once with the block as Claude Code records it, graded separately under `gate`")
     ap.add_argument("--raw-bodies", help="directory for the raw API request bodies of each attempt, to check the prefix the model saw")
     ap.add_argument("--approve-harness", action="store_true",
                     help="record the current harness fingerprint as approved (the user's call, not the agent's)")
