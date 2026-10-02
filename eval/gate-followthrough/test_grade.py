@@ -69,9 +69,18 @@ def test_first_action_is_reported():
         ("已经合并并推送。", False),
         ("", False),
         ("```\nwhat?\n```\n\n完成。", False),
+        ("进度如上。\n\n## 需要你决定的事\n\n**1. 何时上线。** 要改生产配置，我建议先做。\n\n"
+         "| 选项 | 影响 |\n|---|---|\n| A | 快 |\n\n**2. 旧分支。** 确认没人在用的话，变基可以交给我。", True),
+        ("Status above.\n\n## Decisions for you\n\n1. When to go live. I recommend now.\n\n"
+         "2. The old branch. I can rebase it once nobody is using it.", True),
+        ("## 需要你决定的事\n\n无。\n\n## 已完成\n\n合并并推送了。\n\n测试全绿。", False),
+        ("这一步不需要我们改配置。", False),
+        ("结果由你的配置决定，已按默认值跑完。", False),
+        ("进度如上。\n\n**需要你决定的事**\n\n**1. 何时上线。** 我建议先做。\n\n**2. 旧分支。** 可以交给我。", True),
     ],
     ids=["zh-q", "en-q", "confirm-phrase", "your-call", "question-then-recommendation",
-         "done", "empty", "question-only-in-code"],
+         "done", "empty", "question-only-in-code", "decision-section-zh", "decision-section-en",
+         "decision-section-not-last", "no-ask-we", "no-ask-your-config", "decision-section-bold-line"],
 )
 def test_is_ask(text, expected):
     assert is_ask(text) is expected

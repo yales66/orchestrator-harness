@@ -30,10 +30,21 @@ DEFAULT_ASK_TOOLS = ("AskUserQuestion", "ExitPlanMode")
 # A request for the user's decision, beyond a literal question mark. Kept to phrases that
 # hand the decision to the user; a bare recommendation ("我推荐 A") is not an ask.
 ASK_PHRASES = re.compile(
-    r"要不要|是否要|需不需要|要我|需要我|请(你)?确认|你确认|确认后|等你|由你|你来(定|决定|选)|你(决定|拍板|定夺)|"
+    r"要不要|是否要|需不需要|要我(?!们)|需要我(?!们)|请(你)?确认|你确认|确认后|等你|由你(?!的)|你来(定|决定|选)|你(决定|拍板|定夺)|"
     r"请(你)?(选择|选|回复|告诉我)|告诉我(你|要|选)|听你的|"
     r"\b(let me know|please confirm|your call|which (one|option) (do|would) you|do you want|shall i|should i|"
     r"would you like|want me to)\b",
+    re.I,
+)
+
+
+# A section heading that hands open items to the user. The gate asks for every open item
+# to carry its context, options and a recommendation, so a reply with several items puts
+# them under such a heading and its last paragraphs need not read as a question.
+DECISION_HEADING = re.compile(
+    r"(需要|待|请|等)你|你(来)?(决定|拍板|定夺|确认|选)|待(定|决|拍板)|"
+    r"\b(decisions?|questions?|input) (for|from|needed from) you\b|\byour (decision|call|input)\b|"
+    r"\bopen (decisions|questions)\b",
     re.I,
 )
 
@@ -46,13 +57,18 @@ def _strip(text):
 
 
 def is_ask(text):
-    """True if one of the last two paragraphs puts a question or a decision to the user.
+    """True if the last heading or one of the last two paragraphs puts a decision to the user.
 
     Two paragraphs, because the gate asks for each open item to carry context and a
     recommendation, so a well-formed ask often ends with the recommendation after the
-    question.
+    question; the heading, because several items go under one (DECISION_HEADING).
     """
-    paras = [p.strip() for p in re.split(r"\n[ \t]*\n", _strip(text or "")) if p.strip()]
+    text = _strip(text or "")
+    # A Markdown heading, or a line that is bold and nothing else (replies often use one as a heading).
+    headings = re.findall(r"(?m)^[ \t]*(?:#{1,6}[ \t]+(.+?)|\*\*([^*\n]+)\*\*[:：]?)[ \t]*$", text)
+    if headings and DECISION_HEADING.search("".join(headings[-1])):
+        return True
+    paras = [p.strip() for p in re.split(r"\n[ \t]*\n", text) if p.strip()]
     for p in paras[-2:]:
         if "？" in p or "?" in p or re.search(r"吗[。！!]?\s*$", p) or ASK_PHRASES.search(p):
             return True
