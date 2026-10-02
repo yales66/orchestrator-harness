@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | `implementer` subagent | `agents/implementer.md`, implementation whose design decisions the brief has fixed, at effort `medium` with every tool. It reports a decision the brief left open instead of settling it |
 | ADR 0008 | Why subagent effort is set per kind of dispatch, with the effort sweep's results |
 | ADR 0009 | Why read-only subagents create files only where the brief points and `retriever` leaves a judgement to the main thread; it supersedes the Limits of those two definitions in ADR 0008 |
+| `scripts/ci-local.sh` | Runs the CI checks locally in one command: the hook tests of both copies, shellcheck and the en/zh parity check, exiting non-zero if any fails. It covers only the operating system and bash it runs on |
 
 ### Changed
 

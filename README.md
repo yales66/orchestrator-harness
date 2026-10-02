@@ -123,7 +123,11 @@ Each hook test prints `PASS=<n> FAIL=<n>` and exits non-zero on any failure. The
 bash scripts/check-parity.sh
 ```
 
-CI runs on every push and pull request. It runs the hook tests of both copies, 501 cases each, on Ubuntu and macOS, runs shellcheck over the hooks, their tests and the repository scripts, and runs the en/zh parity check.
+CI runs on every push and pull request. It runs the hook tests of both copies, 501 cases each, on Ubuntu and macOS, runs shellcheck over the hooks, their tests and the repository scripts, and runs the en/zh parity check. To run the same three checks locally before pushing, run the command below from the repository root. It needs `python3`, `jq`, `git` and `shellcheck` on `PATH`, and covers only your operating system and the bash you run it with; on a Mac, `/bin/bash scripts/ci-local.sh` matches the bash 3.2 that CI uses. The parity check sees only files git tracks, so `git add` new files before running it:
+
+```bash
+bash scripts/ci-local.sh
+```
 
 ## Documentation
 
