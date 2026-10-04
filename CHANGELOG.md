@@ -15,6 +15,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | ADR 0008 | Why subagent effort is set per kind of dispatch, with the effort sweep's results |
 | ADR 0009 | Why read-only subagents create files only where the brief points and `retriever` leaves a judgement to the main thread; it supersedes the Limits of those two definitions in ADR 0008 |
 | `scripts/ci-local.sh` | Runs the CI checks locally in one command: the hook tests of both copies, shellcheck and the en/zh parity check, exiting non-zero if any fails. It covers only the operating system and bash it runs on |
+| `handoff` skill | `skills/handoff/SKILL.md` generates `HANDOFF.md` whole. `scripts/extract.py` writes every input the user gave in the session, including answers to choice questions in either wording, and the git state of each repository; `--transcript` is required. A `researcher` with none of the session's context writes the draft and checks before it writes; the review takes the first branch that holds and has the same `researcher` rewrite through SendMessage when the open items must change; `scripts/finalize.sh` moves the draft into place and archives the old handoff. Step 0 checks the entry: wrap-up gets no handoff, and a question that awaits the user gets a one-off wake-up 50 minutes out, which writes the handoff before a one-hour prompt cache expires. The scripts carry pytest tests |
+| `handoff-guard.sh` | PreToolUse hook on `Edit\|Write\|NotebookEdit\|MultiEdit\|Bash` that denies direct writes to `HANDOFF.md` in every thread, while writing `HANDOFF.new.md` and running `finalize.sh` pass |
+| `production-merge-gate.sh` | PreToolUse hook on `Bash` that has Claude Code ask the user before `gh pr merge` in a repository marked with `git config claude.production true`, and before a merge whose `-R` names another repository |
+| `production-mode-hint.sh` | UserPromptSubmit hook that adds one line on setting and checking the production mark when the user's own message mentions production mode |
+| ADR 0010 | Why handoffs are generated whole by the handoff skill and a hook denies hand edits; it supersedes the handoff format of ADR 0004 and the cross-session authorisation rule of ADR 0006 |
+| ADR 0011 | Why wrap-up finishes in the current session at any watermark and a pending decision gets a wake-up before the cache expires; it extends ADR 0007 |
+| ADR 0012 | Why merging a pull request the task opened is undoable outside production repositories and a hook asks first in production; it supersedes the classing of merging as external in ADR 0006 |
+| CI job for skill scripts | Runs the pytest tests under `skills/*/scripts/` of both copies; `scripts/ci-local.sh` runs them too and fails when pytest is missing |
 
 ### Changed
 
@@ -25,14 +33,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | Playbook §1 | The row routing domain-model work to `domain-modeling` is gone; with the skill installed its own description triggers it |
 | `memory-audit` skill | The backup step no longer describes the author's own `~/.claude` layout |
 | `subagent-readonly-guard.sh` | Restricts `retriever` the same way as `researcher` |
-| Hook regression tests | Cases for the `retriever` restriction and for `implementer` passing the guard. The hook tests hold 501 cases per copy |
+| Hook regression tests | Cases for the `retriever` restriction, for `implementer` passing the guard, for the three new hooks and for the watermark gate's block reasons naming the handoff skill. The hook tests hold 598 cases per copy, and the handoff scripts 36 pytest cases |
 | Static context measurement | Rerun with the three agent definitions on Claude Code 2.1.286 and claude-opus-5-5. Each subagent's first-request input is 10,186 tokens in H against 13,529 in N for the English copy, 3,343 fewer or about 25%, and 10,108 against 13,739 for the Chinese copy, 3,631 fewer or about 26% |
 | Fork replay runner | `--playbook FILE` replaces every playbook the recorded SessionStart hook injected into the session copy, including the rendered text a resume sends to the model, and the playbook in the config directory. A case's `cut_uuid` removes the earlier tasks before that prompt from the session copy. The reps of a case run back to back from a temp directory fixed per case and variant, so every rep after the first reads the request prefix from a prompt cache written at the 5-minute TTL. A dropped network connection is retried in place like an overload or a rate limit, five attempts within about three minutes. Replays run at effort `high` unless the eval config sets another, because the recorded sessions ran at `high` and claude-opus-5-5 falls back to `medium` when nothing sets it |
 | Effort sweep | Ran 20 briefs twice at each effort on claude-opus-5-5, with the results in its README and in ADR 0008. The runner reads the effort each request carried from the captured request bodies and fails an attempt whose subagent requests carried another effort as `effort_mismatch`, and it fails an attempt that a usage limit or another API error cut short as `rate_limited` or `api_error` |
-| Evaluation write-up | `docs/evaluation.md` and `docs/zh/evaluation.md` report the effort sweep's results |
+| Evaluation write-up | `docs/evaluation.md` and `docs/zh/evaluation.md` report the effort sweep's results, and note that the static context figures were measured before the handoff skill was added and playbook §3 was shortened |
 | Rules on missed asks | Shelved, with the reason in its README. Neither playbook arm routes work to `feature-sharding`, a skill the repository does not ship |
 | Gate follow-through | The stub hook's denial reads "PreToolUse hook：已记录，视同执行。" (recorded, treated as done) |
-| Architecture diagrams | The read-only guard box in all four diagrams covers `retriever` as well as `researcher` |
+| Architecture diagrams | The read-only guard box in all four diagrams covers `retriever` as well as `researcher`. The diagrams add the UserPromptSubmit hook, the handoff guard and the production merge gate in PreToolUse, and a handoff file generated only by the handoff skill |
+| Playbook §1 | Merging a pull request this task opened, with no reviewer, once CI or the delivery gate passes counts as undoable, and merging leaves the list of external steps; a pull request left as a draft over doubts about its content is not merged. An authorisation valid across tasks goes into project memory, and one binding only this task's remaining work travels in the handoff |
+| Playbook §3 | Progress goes into the task's progress source or an append-only `PROGRESS.md`, which `HANDOFF.md` never counts as; `HANDOFF.md` is generated only by the handoff skill; wrap-up is finished at any watermark unless the gate blocks again. The handoff structure and evidence items moved into the handoff skill |
+| `context-watermark-gate.sh` | Its block reasons point to the handoff skill and end with the transcript path |
+| `settings.example.json` | Registers `production-mode-hint.sh` on UserPromptSubmit, `production-merge-gate.sh` on PreToolUse `Bash` and `handoff-guard.sh` on PreToolUse `Edit\|Write\|NotebookEdit\|MultiEdit\|Bash` |
+| `scripts/check-parity.sh` | Files under `skills/*/scripts/` must be byte-identical in the two copies, as the hooks are |
+| README | Describes the handoff skill, the three new hooks and the UserPromptSubmit path, gives the one-hour cache premise behind the 50-minute wake-up and how to adjust it, and notes that the static context figures were measured before this change |
 
 ## [0.4.0] - 2026-09-30
 
