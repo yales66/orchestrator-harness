@@ -13,6 +13,9 @@ KEEP_PROMPT='[保活] 若本对话里找不到设定本任务的记录（例如�
 #   peer:<几小时前>      另一会话发来的消息  toolres            一条只含工具结果的用户角色消息
 #   asst:<token>         主线程 assistant    side:<token>       子智能体（isSidechain）assistant
 #   dup:<token>          与上一条 assistant 同 message.id 的续行
+#   w5m:<token> w1h:<token> w0:<token>  主线程 assistant，usage.cache_creation 按 5 分钟／1 小时写入，
+#                        或两档都为 0；asst 不带 cache_creation 字段
+#   s5m:<token>          子智能体（isSidechain）assistant，按 5 分钟写入
 #   create:<id>          以 [保活] 开头的 CronCreate 及其结果  other:<id>  不以 [保活] 开头的 CronCreate
 #   delete:<id>          CronDelete
 mk() {
@@ -29,11 +32,17 @@ lines, n, last_id = [], 0, "msg_0"
 def user(content, hours=0, **kw):
     d = {"type": "user", "timestamp": ts(hours), "message": {"role": "user", "content": content}}
     d.update(kw); lines.append(d)
-def asst(tok, mid, side=False, content=None):
+def asst(tok, mid, side=False, content=None, ttl=None):
+    u = {"input_tokens": 2, "cache_read_input_tokens": int(tok) - 2, "cache_creation_input_tokens": 0}
+    if ttl is not None:
+        w = 0 if ttl == "0" else 100
+        u["cache_read_input_tokens"] -= w
+        u["cache_creation_input_tokens"] = w
+        u["cache_creation"] = {"ephemeral_5m_input_tokens": w if ttl == "5m" else 0,
+                               "ephemeral_1h_input_tokens": w if ttl == "1h" else 0}
     lines.append({"type": "assistant", "isSidechain": side, "timestamp": ts(0),
                   "message": {"role": "assistant", "id": mid, "content": content or [{"type": "text", "text": "ok"}],
-                              "usage": {"input_tokens": 2, "cache_read_input_tokens": int(tok) - 2,
-                                        "cache_creation_input_tokens": 0}}})
+                              "usage": u}})
 def tool(name, inp, result, tur=None):
     global n
     n += 1; tid = "toolu_%d" % n
@@ -51,6 +60,10 @@ for e in events:
     elif k in ("asst", "side"):
         n += 1; last_id = "msg_%d" % n; asst(v, last_id, side=(k == "side"))
     elif k == "dup":    asst(v, last_id)
+    elif k in ("w5m", "w1h", "w0"):
+        n += 1; last_id = "msg_%d" % n; asst(v, last_id, ttl=k[1:])
+    elif k == "s5m":
+        n += 1; asst(v, "msg_%d" % n, side=True, ttl="5m")
     elif k == "create":
         tool("CronCreate", {"cron": "7,37 * * * *", "recurring": True, "prompt": keep},
              "Scheduled recurring job %s (7,37 * * * *)" % v, {"id": v})
@@ -68,7 +81,7 @@ PY
 # payload <transcript> [额外 JSON 字段]
 payload() { printf '{"hook_event_name":"Stop","transcript_path":"%s"%s}' "$1" "${2:+,$2}"; }
 
-# verdict <输入JSON> [环境变量赋值...] —— 把钩子输出归成 allow|create|delete|其他
+# verdict <输入JSON> [环境变量赋值...] —— 把钩子输出归成 allow|create|delete|drop|其他
 verdict() {
   local p="$1"; shift
   if [ ! -f "$HOOK" ]; then echo "脚本不存在"; return; fi
@@ -80,6 +93,7 @@ try: o=json.loads(raw)
 except Exception: print("非JSON输出"); raise SystemExit
 r=o.get("reason","") if o.get("decision")=="block" else ""
 if r.startswith("保活已满 8 小时"): print("delete")
+elif r == "缓存已降为 5 分钟（用量超额），保活续不上缓存：用 CronList 找到以 [保活] 开头的任务并 CronDelete，然后结束。": print("drop")
 elif r.startswith("上下文已过 150k") and "CronCreate" in r: print("create")
 else: print("格式不符")
 '
@@ -118,6 +132,17 @@ delete|上下文很小时保活回合照样按 8 小时删||user:9 asst:1000 cre
 allow|用户 9 小时前但本回合不是保活回合，有效保活放行||user:9 asst:150000 create:job1 agentmsg:0 asst:160000
 allow|子智能体的大 usage 不算主线程上下文||user:0 asst:100000 side:400000
 create|同一 message.id 的续行取主线程最后一次||user:0 asst:100000 dup:150000
+drop|5 分钟 TTL 且有有效保活要删||user:1 w1h:150000 create:job1 user:0 w5m:160000
+allow|5 分钟 TTL 且无有效保活放行不设||user:0 w5m:200000
+allow|5 分钟 TTL 且保活已被删放行不设||user:1 w1h:150000 create:job1 delete:job1 user:0 w5m:160000
+drop|5 分钟 TTL 先于 8 小时判定||user:9 w1h:150000 create:job1 keep:0 w5m:160000
+create|1 小时 TTL 照常设||user:0 w1h:150000
+create|cache_creation 字段缺失照常设||user:0 asst:150000
+drop|两档写入都为 0 时往前找到 5 分钟||user:1 w1h:150000 create:job1 user:0 w5m:155000 w0:160000
+create|两档写入都为 0 时往前找到 1 小时照常设||user:0 w1h:100000 w0:150000
+create|往前也找不到写入按 1 小时设||user:0 w0:150000
+create|子智能体的 5 分钟写入不算主线程||user:0 w1h:150000 s5m:1000
+allow|最后一次写入为 1 小时、之前 5 分钟，按 1 小时放行有效保活||user:1 w5m:150000 create:job1 user:0 w1h:160000
 TABLE
 
 echo "── cron 分钟由钩子按当前时间算好，避开 0 与 30（表驱动：当前分钟|期望 cron） ──"
