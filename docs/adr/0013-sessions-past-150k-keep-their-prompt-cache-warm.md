@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. In effect since 4 October 2026. Complements [ADR 0011](0011-wrap-up-finishes-in-session-at-any-watermark.md): ADR 0011's 50-minute wake-up writes a handoff when a question awaits the user's decision and a large block of work follows it, and this ADR covers the rest of the idle waiting.
+Superseded by [ADR 0014](0014-idle-sessions-past-150k-keep-their-prompt-cache-warm-with-an-async-rewake.md) on 4 October 2026.
 
 ## Context
 

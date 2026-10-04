@@ -2,7 +2,7 @@
 
 ## 状态
 
-已采纳，自 2026 年 10 月 4 日起生效。与 [ADR 0011](0011-wrap-up-finishes-in-session-at-any-watermark.md) 互补：ADR 0011 的 50 分钟唤醒针对有问题等用户拍板、拍板后还有大块工作的情形，到时写交接；本 ADR 覆盖其余的空闲等待。
+自 2026 年 10 月 4 日起被 [ADR 0014](0014-idle-sessions-past-150k-keep-their-prompt-cache-warm-with-an-async-rewake.md) 取代。
 
 ## 背景
 
