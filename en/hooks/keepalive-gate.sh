@@ -8,14 +8,21 @@
 # 只在上下文 ≥ 150k 时设：小上下文过期了重写也便宜，不值得定时空跑。
 # 从用户本人最后一条消息起最多保活 8 小时，防止被遗忘的会话一直在续缓存。
 # 设定与撤销都由本钩子拦停时下达，不写进规则文本，规则文本会常驻每个会话的上下文。
+# 订阅额度用尽、改走用量计费后，Claude Code 把主对话的缓存降为 5 分钟 TTL
+# （https://code.claude.com/docs/en/prompt-caching）：30 分钟一次的保活续不上缓存，还花付费额度，
+# 所以这时不设保活，已设的让模型删掉。
 #
 # 按顺序取第一条成立的：
 #   1. stop_hook_active 为真（上一轮已拦，正因此续跑）或在子智能体内：放行。
-#   2. 本回合由保活触发，且用户本人最后一条消息已过 8 小时：拦下，要求删掉保活任务。
-#   3. 主线程上下文 ≥ 150k 且 transcript 里没有仍有效的保活任务：拦下，要求设保活。
-#   4. 其余放行。
+#   2. 缓存为 5 分钟 TTL：有仍有效的保活任务则拦下，要求删掉；没有则放行，不设。
+#   3. 本回合由保活触发，且用户本人最后一条消息已过 8 小时：拦下，要求删掉保活任务。
+#   4. 主线程上下文 ≥ 150k 且 transcript 里没有仍有效的保活任务：拦下，要求设保活。
+#   5. 其余放行。
 # 上下文取 transcript 里主线程（非 isSidechain）最后一次 assistant 调用的 usage，
 # 同 context-watermark-gate.sh：input + cache_read + cache_creation。
+# TTL 取主线程最近一次有缓存写入的 assistant 调用的 usage.cache_creation：
+# ephemeral_5m_input_tokens > 0 且 ephemeral_1h_input_tokens == 0 为 5 分钟；
+# 字段缺失或两档都为 0 的调用跳过往前找，都找不到按 1 小时处理。
 # 「仍有效」＝有一次 input.prompt 以 [保活] 开头的 CronCreate 成功返回，且其结果里的任务 id
 # 之后没被 CronDelete 删掉。KEEPALIVE_NOW_EPOCH 只给测试固定当前时间。
 # 任何异常一律放行，hook 不该卡死会话。
@@ -60,6 +67,7 @@ def epoch(ts):
         return None
 
 used = 0
+short_ttl = False         # 最近一次有缓存写入的调用是 5 分钟 TTL
 last_prompt = None        # 最后一条带文字的用户角色消息
 last_user_at = None       # 用户本人最后一条消息的时间
 creates = {}              # tool_use_id -> 结果文本（None 表示还没结果）
@@ -81,6 +89,12 @@ with open(tp, encoding="utf-8") as f:
                     (u.get("cache_creation_input_tokens") or 0)
                 if t:
                     used = t      # 同一 message.id 的续行带同一份 usage，取最后一行即可
+                cc = u.get("cache_creation")
+                if isinstance(cc, dict):
+                    w5 = cc.get("ephemeral_5m_input_tokens") or 0
+                    w1 = cc.get("ephemeral_1h_input_tokens") or 0
+                    if w5 or w1:
+                        short_ttl = w5 > 0 and w1 == 0
             for b in content if isinstance(content, list) else ():
                 if not isinstance(b, dict) or b.get("type") != "tool_use":
                     continue
@@ -108,6 +122,20 @@ with open(tp, encoding="utf-8") as f:
 
 now = float(os.environ.get("KEEPALIVE_NOW_EPOCH") or time.time())
 
+def alive(result):
+    if result is None:    # 结果还没落进 transcript，按已设处理，免得重复设
+        return True
+    return not any(re.search(r"(?<![\w-])%s(?![\w-])" % re.escape(j), result) for j in deleted)
+
+live = any(alive(r) for r in creates.values())
+
+if short_ttl:
+    if live:
+        print(json.dumps({"decision": "block",
+                          "reason": "缓存已降为 5 分钟（用量超额），保活续不上缓存：用 CronList 找到以 [保活] 开头的任务并 CronDelete，然后结束。"},
+                         ensure_ascii=False))
+    sys.exit(0)
+
 if last_prompt is not None and last_prompt.lstrip().startswith(MARK):
     if last_user_at is None or now - last_user_at > MAX_IDLE:
         print(json.dumps({"decision": "block",
@@ -115,12 +143,7 @@ if last_prompt is not None and last_prompt.lstrip().startswith(MARK):
                          ensure_ascii=False))
         sys.exit(0)
 
-def alive(result):
-    if result is None:    # 结果还没落进 transcript，按已设处理，免得重复设
-        return True
-    return not any(re.search(r"(?<![\w-])%s(?![\w-])" % re.escape(j), result) for j in deleted)
-
-if used >= THRESHOLD and not any(alive(r) for r in creates.values()):
+if used >= THRESHOLD and not live:
     a = time.localtime(now).tm_min % 30 or 1
     cron = "%d,%d * * * *" % (a, a + 30)
     print(json.dumps({"decision": "block", "reason": (
