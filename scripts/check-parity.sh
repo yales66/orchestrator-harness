@@ -4,9 +4,10 @@
 # 1. Both folders hold the same relative file paths. The one allowed
 #    difference is zh/README.md: the English README is the repository root
 #    README.md, so en/ has no README of its own.
-# 2. Every file under hooks/ (scripts and their tests) and agents/ is
+# 2. Every file under hooks/ (scripts and their tests), agents/ and
+#    skills/*/scripts/ (helper scripts a skill runs, and their tests) is
 #    byte-identical in the two copies, because the README states that the hook
-#    scripts are identical.
+#    and skill scripts are identical.
 # 3. settings.example.json registers the same hooks in both copies. The one
 #    allowed difference is the REPLY_LANG=zh prefix on zh/'s reply-gate
 #    command, which switches on the gate's reply-language check for a Chinese
@@ -43,7 +44,7 @@ if [ "$en_files" != "$zh_files" ]; then
   status=1
 fi
 
-identical="$(printf '%s\n' "$en_files" | grep -E '^hooks/|^agents/' || true)"
+identical="$(printf '%s\n' "$en_files" | grep -E '^hooks/|^agents/|^skills/[^/]+/scripts/' || true)"
 checked=0
 while IFS= read -r rel; do
   [ -n "$rel" ] || continue
