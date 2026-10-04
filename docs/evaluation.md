@@ -37,6 +37,8 @@ The placement decision shows up in the subagent column: keeping the playbook out
 
 The runs used Claude Code 2.1.286, claude-opus-5-5 for both the main thread and the subagent, and one general-purpose subagent. Claude Code's own system prompt and tool definitions change from version to version, so the absolute numbers hold only for 2.1.286, and another version needs a rerun of the script. These figures cover only first-request input and do not represent the cost of a whole task, because later turns add tool results and conversation history on top. Token counts are not billed amounts either, since cache reads are charged at a discount on the base input price. The measurement cannot say whether a leaner subagent does better work. Per-run numbers, the split between cache writes and cache reads, and the checks that the playbook loaded where expected are in [eval/static-context/results.md](../eval/static-context/results.md).
 
+These figures were measured before the handoff skill was added and section 3 of the playbook was shortened. That change alters both the playbook the main thread receives and the skill list every thread loads, so the figures describe the files as they stood before it, and a rerun of `bash eval/static-context/run.sh` measures the current ones.
+
 ## Hook mutation testing
 
 `eval/hook-mutations` measures how many deliberately injected defects the hook regression tests catch. Each mutant is one textual edit to a copy of one hook that breaks one rule stated in the hook's header comment, such as a negated condition, an alternative dropped from a pattern or a moved threshold. The hook's own test file then runs against the copy, and the mutant is killed when the test fails. The mutation score is killed mutants divided by evaluated ones.

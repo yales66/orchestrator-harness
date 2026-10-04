@@ -2,7 +2,7 @@
 
 ## 状态
 
-已采纳，自 2026 年 9 月 19 日起生效。其中的交接时机由 [ADR 0007](0007-handoff-timing-weighs-switch-against-long-context.md) 取代。
+已采纳，自 2026 年 9 月 19 日起生效。其中的交接时机由 [ADR 0007](0007-handoff-timing-weighs-switch-against-long-context.md) 取代；交接格式原由编排手册 §3 定义，由 [ADR 0010](0010-handoffs-are-generated-whole-by-the-handoff-skill.md) 取代，改由 handoff 技能定义。
 
 ## 背景
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. In effect since 19 September 2026. Its handoff timing is superseded by [ADR 0007](0007-handoff-timing-weighs-switch-against-long-context.md).
+Accepted. In effect since 19 September 2026. Its handoff timing is superseded by [ADR 0007](0007-handoff-timing-weighs-switch-against-long-context.md), and its handoff format, which section 3 of the playbook defined, by [ADR 0010](0010-handoffs-are-generated-whole-by-the-handoff-skill.md), under which the handoff skill defines it.
 
 ## Context
 

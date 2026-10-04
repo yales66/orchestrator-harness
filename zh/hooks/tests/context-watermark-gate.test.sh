@@ -110,6 +110,22 @@ reason_has "首次拦截只要求做到断点,不要求立即落盘" no "现在�
 reason_has "越线后再涨过阈值再拦时要求立即落盘" yes "现在就" \
   "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T_HIGHER\",\"scratchpad_dir\":\"$SPR\"}"
 
+echo "── 拦截理由指向 handoff 技能并附 transcript 路径 ──"
+FIRST="{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T_HARD\"}"
+reason_has "首次拦截指向 handoff 技能" yes "先用 handoff 技能落盘交接" "$FIRST"
+reason_has "首次拦截不再指向 playbook §3" no "playbook §3" "$FIRST"
+reason_has "首次拦截末尾附 transcript 路径" yes "（transcript: ${T_HARD}）" "$FIRST"
+# again <scratchpad 名>：在一个新 scratchpad 里先拦一次，回传水位再涨过阈值时的输入
+again() {
+  local sp="$TMP/$1"; mkdir -p "$sp"
+  printf '%s' "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T_HARD\",\"scratchpad_dir\":\"$sp\"}" \
+    | bash "$HOOK" >/dev/null 2>&1
+  echo "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T_HIGHER\",\"scratchpad_dir\":\"$sp\"}"
+}
+reason_has "再拦指向 handoff 技能" yes "现在就用 handoff 技能落盘交接" "$(again sp-h1)"
+reason_has "再拦不再指向 playbook §3" no "playbook §3" "$(again sp-h2)"
+reason_has "再拦末尾附 transcript 路径" yes "（transcript: ${T_HIGHER}）" "$(again sp-h3)"
+
 SPW="$TMP/scratchpad-warn"; mkdir -p "$SPW"
 check warn  "首次过提醒线提醒一次" \
   "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T_WARN\",\"scratchpad_dir\":\"$SPW\"}"

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. In effect since 30 September 2026. Supersedes the handoff timing of ADR 0004; the way ADR 0004 reads the watermark from transcript usage stands.
+Accepted. In effect since 30 September 2026. Supersedes the handoff timing of ADR 0004; the way ADR 0004 reads the watermark from transcript usage stands. Extended by [ADR 0011](0011-wrap-up-finishes-in-session-at-any-watermark.md): the wrap-up this ADR finishes in the current session past the hard line is finished there at any watermark, and the weighing before a new large block of work stands.
 
 ## Context
 

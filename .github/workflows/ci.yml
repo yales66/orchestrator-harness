@@ -28,17 +28,40 @@ jobs:
           done
           exit "$status"
 
+  pytest:
+    name: skill script tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install pytest
+        run: python -m pip install pytest
+      - name: Skill script tests (en and zh)
+        # one pytest process per copy: both copies hold test modules of the same name
+        run: |
+          status=0
+          for d in en/skills/*/scripts zh/skills/*/scripts; do
+            ls "$d"/test_*.py >/dev/null 2>&1 || continue
+            echo "::group::$d"
+            python -m pytest -p no:cacheprovider "$d" || { echo "::error::$d failed"; status=1; }
+            echo "::endgroup::"
+          done
+          exit "$status"
+
   shellcheck:
     name: shellcheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Lint hook scripts, hook tests and repository scripts
+      - name: Lint hook scripts, hook tests, skill scripts and repository scripts
         run: |
           shellcheck --version
           shellcheck --severity=warning \
             scripts/*.sh en/hooks/*.sh zh/hooks/*.sh \
-            en/hooks/tests/*.sh zh/hooks/tests/*.sh
+            en/hooks/tests/*.sh zh/hooks/tests/*.sh \
+            en/skills/*/scripts/*.sh zh/skills/*/scripts/*.sh
 
   parity:
     name: en/zh parity

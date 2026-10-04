@@ -12,6 +12,17 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/hooks/production-mode-hint.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Agent|Task|Workflow",
@@ -33,6 +44,16 @@
         ]
       },
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/hooks/production-merge-gate.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "Bash|Read",
         "hooks": [
           {
@@ -48,6 +69,11 @@
           {
             "type": "command",
             "command": "bash $HOME/.claude/hooks/subagent-readonly-guard.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/hooks/handoff-guard.sh",
             "timeout": 10
           }
         ]
