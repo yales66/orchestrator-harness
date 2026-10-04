@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. In effect since 4 October 2026. Extends [ADR 0007](0007-handoff-timing-weighs-switch-against-long-context.md): the wrap-up that ADR 0007 finishes in the current session past the hard line is now finished there at any watermark. ADR 0007's weighing before a new large block of work, and its immediate handoff when the user ends the session or the gate blocks a second time, stand.
+Accepted. In effect since 4 October 2026. Extends [ADR 0007](0007-handoff-timing-weighs-switch-against-long-context.md): the wrap-up that ADR 0007 finishes in the current session past the hard line is now finished there at any watermark. ADR 0007's weighing before a new large block of work, and its immediate handoff when the user ends the session or the gate blocks a second time, stand. The 50-minute wake-up now runs as a background `sleep 3000` instead of a CronCreate one-off, because the auto mode classifier denies CronCreate as unauthorized persistence (see [ADR 0014](0014-idle-sessions-past-150k-keep-their-prompt-cache-warm-with-an-async-rewake.md)).
 
 ## Context
 

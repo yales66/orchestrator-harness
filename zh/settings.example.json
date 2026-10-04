@@ -118,7 +118,8 @@
           {
             "type": "command",
             "command": "bash $HOME/.claude/hooks/keepalive-gate.sh",
-            "timeout": 10
+            "asyncRewake": true,
+            "timeout": 3300
           }
         ]
       }

@@ -1,31 +1,34 @@
 #!/bin/bash
-# Stop hook: 上下文过 150k 的会话设一个保活定时任务，用户离开时提示缓存不过期。
+# Stop hook（asyncRewake）: 上下文过 150k 的会话在用户离开 50 分钟后唤醒模型回一个句点，保住提示缓存。
 #
 # 会话的提示缓存 1 小时不用就过期，过期后下一轮要把整段上下文按写入价重新写一遍。
-# 保活任务每 30 分钟触发一次只回一个句点，把缓存续上。间隔取 30 分钟而不是贴着 1 小时：
-# cron 表达式只能按分钟字段列举，表达不了 55 分钟这种间隔；重复任务又可能晚到周期的 10%，
-# 30 分钟加上抖动仍落在 1 小时有效期内。分钟避开 0 与 30，免得和整点、半点的任务挤在一起。
-# 只在上下文 ≥ 150k 时设：小上下文过期了重写也便宜，不值得定时空跑。
-# 从用户本人最后一条消息起最多保活 8 小时，防止被遗忘的会话一直在续缓存。
-# 设定与撤销都由本钩子拦停时下达，不写进规则文本，规则文本会常驻每个会话的上下文。
+# 本钩子配 "asyncRewake": true 在后台跑：每轮结束都起一次 50 分钟的计时，计时期间会话有任何
+# 新的一轮（用户发消息、后台通知、子智能体回报），这次计时就作废，新一轮结束时自会起新的计时；
+# 一直没有活动才以退出码 2 唤醒模型，提示只要一个句点，把缓存续上。所以它只在用户离开时触发。
+# 50 分钟让唤醒落在 1 小时有效期内，并给唤醒本身的排队与请求留出余量。
+# 保活回合结束时又会触发本钩子，于是空闲期间每 50 分钟续一次。
+# 不用定时任务：定时任务按钟点触发，用户在场时也照样空跑；auto 模式分类器还会把设定时任务当作
+# 持久化操作拒掉。
+# 只在上下文 ≥ 150k 时计时：小上下文过期了重写也便宜，不值得空跑。
+# 从用户本人最后一条消息起超过 8 小时就不再唤醒，防止被遗忘的会话一直在续缓存。
 # 订阅额度用尽、改走用量计费后，Claude Code 把主对话的缓存降为 5 分钟 TTL
-# （https://code.claude.com/docs/en/prompt-caching）：30 分钟一次的保活续不上缓存，还花付费额度，
-# 所以这时不设保活，已设的让模型删掉。
+# （https://code.claude.com/docs/en/prompt-caching）：50 分钟一次的唤醒续不上缓存，还花付费额度，
+# 所以这时不计时。
 #
 # 按顺序取第一条成立的：
-#   1. stop_hook_active 为真（上一轮已拦，正因此续跑）或在子智能体内：放行。
-#   2. 缓存为 5 分钟 TTL：有仍有效的保活任务则拦下，要求删掉；没有则放行，不设。
-#   3. 本回合由保活触发，且用户本人最后一条消息已过 8 小时：拦下，要求删掉保活任务。
-#   4. 主线程上下文 ≥ 150k 且 transcript 里没有仍有效的保活任务：拦下，要求设保活。
-#   5. 其余放行。
+#   1. stop_hook_active 为真或在子智能体内：退出 0。
+#   2. 主线程上下文 < 150k、缓存为 5 分钟 TTL、或用户本人最后一条消息距今超过 8 小时（没有则同）：退出 0。
+#   3. 睡 KEEPALIVE_SLEEP 秒（默认 3000，只给测试改短）；醒来时 transcript 被删、变短，
+#      或开睡前的末尾之后多了 user／assistant 行：退出 0。
+#   4. 其余向 stderr 写唤醒提示，退出 2。
+# 「活动」只认 user／assistant 行：Stop 之后 Claude Code 自己会往 transcript 追加 stop_hook_summary、
+# turn_duration，空闲几分钟后还会追加 away_summary，这些行不是会话里有了新的一轮。
 # 上下文取 transcript 里主线程（非 isSidechain）最后一次 assistant 调用的 usage，
 # 同 context-watermark-gate.sh：input + cache_read + cache_creation。
 # TTL 取主线程最近一次有缓存写入的 assistant 调用的 usage.cache_creation：
 # ephemeral_5m_input_tokens > 0 且 ephemeral_1h_input_tokens == 0 为 5 分钟；
 # 字段缺失或两档都为 0 的调用跳过往前找，都找不到按 1 小时处理。
-# 「仍有效」＝有一次 input.prompt 以 [保活] 开头的 CronCreate 成功返回，且其结果里的任务 id
-# 之后没被 CronDelete 删掉。KEEPALIVE_NOW_EPOCH 只给测试固定当前时间。
-# 任何异常一律放行，hook 不该卡死会话。
+# 任何异常一律退出 0，不唤醒。
 python3 -c '
 import json, os, re, sys, time
 from datetime import datetime
@@ -33,9 +36,8 @@ from datetime import datetime
 MARK = "[保活]"
 THRESHOLD = 150000
 MAX_IDLE = 8 * 3600
-KEEP_PROMPT = (MARK + " 若本对话里找不到设定本任务的记录（例如已 /clear），用 CronList 找到以 "
-               + MARK + " 开头的任务并 CronDelete；否则只回复一个句点，不做别的。")
-# 子智能体回报、另一会话的消息与后台通知也以用户角色进 transcript，不是用户本人输入
+# 子智能体回报、另一会话的消息、后台通知（保活唤醒也包成后台通知进 transcript）都以用户角色进
+# transcript，不是用户本人输入
 NOT_USER = re.compile(r"\s*(Another Claude session sent a message|<agent-message|<task-notification)")
 
 try:
@@ -49,6 +51,7 @@ if str(p.get("agent_id") or "").strip():
 tp = p.get("transcript_path") or ""
 if not tp or not os.path.isfile(tp):
     sys.exit(0)
+start = os.path.getsize(tp)    # 开睡前的末尾；读 transcript 期间追加的行也算在睡眠期间
 
 def text_of(content):
     """用户角色消息的文字；只含工具结果的返回 None。"""
@@ -68,10 +71,7 @@ def epoch(ts):
 
 used = 0
 short_ttl = False         # 最近一次有缓存写入的调用是 5 分钟 TTL
-last_prompt = None        # 最后一条带文字的用户角色消息
 last_user_at = None       # 用户本人最后一条消息的时间
-creates = {}              # tool_use_id -> 结果文本（None 表示还没结果）
-deleted = []              # CronDelete 删掉的任务 id
 with open(tp, encoding="utf-8") as f:
     for line in f:
         try:
@@ -81,7 +81,6 @@ with open(tp, encoding="utf-8") as f:
         m = o.get("message") if isinstance(o, dict) else None
         if not isinstance(m, dict) or o.get("isSidechain"):
             continue
-        content = m.get("content")
         if m.get("role") == "assistant":
             u = m.get("usage")
             if isinstance(u, dict):
@@ -95,61 +94,33 @@ with open(tp, encoding="utf-8") as f:
                     w1 = cc.get("ephemeral_1h_input_tokens") or 0
                     if w5 or w1:
                         short_ttl = w5 > 0 and w1 == 0
-            for b in content if isinstance(content, list) else ():
-                if not isinstance(b, dict) or b.get("type") != "tool_use":
-                    continue
-                inp = b.get("input") if isinstance(b.get("input"), dict) else {}
-                if b.get("name") == "CronCreate" and str(inp.get("prompt") or "").lstrip().startswith(MARK):
-                    creates[b.get("id")] = None
-                elif b.get("name") == "CronDelete":
-                    jid = inp.get("id") or inp.get("job_id") or inp.get("jobId")
-                    if jid:
-                        deleted.append(str(jid))
         elif m.get("role") == "user":
-            for b in content if isinstance(content, list) else ():
-                if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("tool_use_id") in creates:
-                    if b.get("is_error"):
-                        creates.pop(b.get("tool_use_id"))
-                    else:
-                        creates[b.get("tool_use_id")] = json.dumps([b.get("content"), o.get("toolUseResult")],
-                                                                   ensure_ascii=False)
-            txt = text_of(content)
+            txt = text_of(m.get("content"))
             if txt is None or o.get("isMeta"):
                 continue
-            last_prompt = txt
             if not txt.lstrip().startswith(MARK) and not NOT_USER.match(txt):
                 last_user_at = epoch(o.get("timestamp"))
 
-now = float(os.environ.get("KEEPALIVE_NOW_EPOCH") or time.time())
-
-def alive(result):
-    if result is None:    # 结果还没落进 transcript，按已设处理，免得重复设
-        return True
-    return not any(re.search(r"(?<![\w-])%s(?![\w-])" % re.escape(j), result) for j in deleted)
-
-live = any(alive(r) for r in creates.values())
-
-if short_ttl:
-    if live:
-        print(json.dumps({"decision": "block",
-                          "reason": "缓存已降为 5 分钟（用量超额），保活续不上缓存：用 CronList 找到以 [保活] 开头的任务并 CronDelete，然后结束。"},
-                         ensure_ascii=False))
+if used < THRESHOLD or short_ttl or last_user_at is None or time.time() - last_user_at > MAX_IDLE:
     sys.exit(0)
 
-if last_prompt is not None and last_prompt.lstrip().startswith(MARK):
-    if last_user_at is None or now - last_user_at > MAX_IDLE:
-        print(json.dumps({"decision": "block",
-                          "reason": "保活已满 8 小时：用 CronList 找到以 [保活] 开头的任务并 CronDelete，然后结束。"},
-                         ensure_ascii=False))
-        sys.exit(0)
+time.sleep(float(os.environ.get("KEEPALIVE_SLEEP") or 3000))
 
-if used >= THRESHOLD and not live:
-    a = time.localtime(now).tm_min % 30 or 1
-    cron = "%d,%d * * * *" % (a, a + 30)
-    print(json.dumps({"decision": "block", "reason": (
-        "上下文已过 150k：用 CronCreate 设保活，cron 为 \"%d * * * *\" 与 \"%d * * * *\" 合并成 \"%s\""
-        "（m 取当前分钟数，避开 0 与 30），recurring 为 true，prompt 原样为：%s设好后直接结束，不要回复别的。"
-        % (a, a + 30, cron, KEEP_PROMPT))}, ensure_ascii=False))
-sys.exit(0)
+if not os.path.isfile(tp) or os.path.getsize(tp) < start:
+    sys.exit(0)
+with open(tp, "rb") as f:
+    f.seek(start)
+    for line in f:
+        try:
+            o = json.loads(line.decode("utf-8"))
+        except Exception:
+            continue
+        if isinstance(o, dict) and o.get("type") in ("user", "assistant"):
+            sys.exit(0)
+sys.exit(2)
 ' 2>/dev/null
+if [ $? -eq 2 ]; then
+  printf '%s' '[保活] 只回复一个句点，不做别的。' >&2
+  exit 2
+fi
 exit 0
