@@ -5,26 +5,32 @@ HOOK="$(dirname "$0")/../keepalive-gate.sh"
 PASS=0; FAIL=0
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-KEEP_PROMPT='[保活] 若本对话里找不到设定本任务的记录（例如已 /clear），用 CronList 找到以 [保活] 开头的任务并 CronDelete；否则只回复一个句点，不做别的。'
+WAKE_PROMPT='[保活] 只回复一个句点，不做别的。'
+# 唤醒提示进 transcript 时的样子（Claude Code 包成后台通知）
+REWAKE="<task-notification>
+<summary>Stop hook feedback</summary>
+</task-notification>
+<system-reminder>
+Stop hook blocking error from command \"Stop\": $WAKE_PROMPT
+</system-reminder>"
 
 # mk <文件名> <事件...> —— 按事件顺序造 transcript，回传路径。事件：
-#   user:<几小时前>      用户本人消息        keep:<几小时前>    保活触发的提示
+#   user:<几小时前>      用户本人消息        rewake:<几小时前>  保活唤醒进 transcript 的消息
 #   agentmsg:<几小时前>  子智能体回报        notify:<几小时前>  后台通知
-#   peer:<几小时前>      另一会话发来的消息  toolres            一条只含工具结果的用户角色消息
+#   peer:<几小时前>      另一会话发来的消息  meta:<几小时前>    isMeta 的用户角色消息
+#   toolres              一条只含工具结果的用户角色消息
 #   asst:<token>         主线程 assistant    side:<token>       子智能体（isSidechain）assistant
 #   dup:<token>          与上一条 assistant 同 message.id 的续行
 #   w5m:<token> w1h:<token> w0:<token>  主线程 assistant，usage.cache_creation 按 5 分钟／1 小时写入，
 #                        或两档都为 0；asst 不带 cache_creation 字段
 #   s5m:<token>          子智能体（isSidechain）assistant，按 5 分钟写入
-#   create:<id>          以 [保活] 开头的 CronCreate 及其结果  other:<id>  不以 [保活] 开头的 CronCreate
-#   delete:<id>          CronDelete
+#   summary              Stop 之后 Claude Code 自己写的 stop_hook_summary 与 turn_duration
 mk() {
   local f="$TMP/$1"; shift
-  KEEP_PROMPT="$KEEP_PROMPT" python3 - "$f" "$@" <<'PY'
+  REWAKE="$REWAKE" python3 - "$f" "$@" <<'PY'
 import json, os, sys, time
 from datetime import datetime, timezone
 out, events = sys.argv[1], sys.argv[2:]
-keep = os.environ["KEEP_PROMPT"]
 now = time.time()
 def ts(hours):
     return datetime.fromtimestamp(now - float(hours) * 3600, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
@@ -32,7 +38,7 @@ lines, n, last_id = [], 0, "msg_0"
 def user(content, hours=0, **kw):
     d = {"type": "user", "timestamp": ts(hours), "message": {"role": "user", "content": content}}
     d.update(kw); lines.append(d)
-def asst(tok, mid, side=False, content=None, ttl=None):
+def asst(tok, mid, side=False, ttl=None):
     u = {"input_tokens": 2, "cache_read_input_tokens": int(tok) - 2, "cache_creation_input_tokens": 0}
     if ttl is not None:
         w = 0 if ttl == "0" else 100
@@ -41,20 +47,16 @@ def asst(tok, mid, side=False, content=None, ttl=None):
         u["cache_creation"] = {"ephemeral_5m_input_tokens": w if ttl == "5m" else 0,
                                "ephemeral_1h_input_tokens": w if ttl == "1h" else 0}
     lines.append({"type": "assistant", "isSidechain": side, "timestamp": ts(0),
-                  "message": {"role": "assistant", "id": mid, "content": content or [{"type": "text", "text": "ok"}],
+                  "message": {"role": "assistant", "id": mid, "content": [{"type": "text", "text": "ok"}],
                               "usage": u}})
-def tool(name, inp, result, tur=None):
-    global n
-    n += 1; tid = "toolu_%d" % n
-    asst(1000, "msg_t%d" % n, content=[{"type": "tool_use", "id": tid, "name": name, "input": inp}])
-    user([{"type": "tool_result", "tool_use_id": tid, "content": result}], toolUseResult=tur)
 for e in events:
     k, _, v = e.partition(":")
     if k == "user":     user("帮我看看这个", v)
-    elif k == "keep":   user(keep, v)
+    elif k == "rewake": user(os.environ["REWAKE"], v)
     elif k == "agentmsg": user('<agent-message from="worker">做完了</agent-message>', v)
     elif k == "notify": user("<task-notification><task-id>b1</task-id></task-notification>", v)
     elif k == "peer":   user("Another Claude session sent a message: hi", v)
+    elif k == "meta":   user("Stop hook feedback:\n回复以提议问句收尾。", v, isMeta=True)
     elif k == "toolres":
         n += 1; user([{"type": "tool_result", "tool_use_id": "toolu_x%d" % n, "content": "[]"}])
     elif k in ("asst", "side"):
@@ -64,13 +66,9 @@ for e in events:
         n += 1; last_id = "msg_%d" % n; asst(v, last_id, ttl=k[1:])
     elif k == "s5m":
         n += 1; asst(v, "msg_%d" % n, side=True, ttl="5m")
-    elif k == "create":
-        tool("CronCreate", {"cron": "7,37 * * * *", "recurring": True, "prompt": keep},
-             "Scheduled recurring job %s (7,37 * * * *)" % v, {"id": v})
-    elif k == "other":
-        tool("CronCreate", {"cron": "7 * * * *", "recurring": True, "prompt": "检查部署"},
-             "Scheduled recurring job %s (7 * * * *)" % v, {"id": v})
-    elif k == "delete": tool("CronDelete", {"id": v}, "Cancelled job %s." % v)
+    elif k == "summary":
+        lines.append({"type": "system", "subtype": "stop_hook_summary", "timestamp": ts(0), "hookCount": 1})
+        lines.append({"type": "system", "subtype": "turn_duration", "timestamp": ts(0), "durationMs": 10})
 with open(out, "w", encoding="utf-8") as f:
     for d in lines:
         f.write(json.dumps(d, ensure_ascii=False) + "\n")
@@ -81,22 +79,23 @@ PY
 # payload <transcript> [额外 JSON 字段]
 payload() { printf '{"hook_event_name":"Stop","transcript_path":"%s"%s}' "$1" "${2:+,$2}"; }
 
-# verdict <输入JSON> [环境变量赋值...] —— 把钩子输出归成 allow|create|delete|drop|其他
+# verdict <输入JSON> [钩子睡眠期间对 $T 做的动作] —— 归成 allow|wake|其他。
+# allow ＝退出 0 且无任何输出；wake ＝退出 2、stdout 为空、stderr 恰为唤醒提示。
+# 钩子睡 1 秒（KEEPALIVE_SLEEP=1），动作在钩子起跑 0.5 秒后执行。
 verdict() {
-  local p="$1"; shift
+  local p="$1" act="$2" rc
   if [ ! -f "$HOOK" ]; then echo "脚本不存在"; return; fi
-  printf '%s' "$p" | env "$@" bash "$HOOK" 2>/dev/null | python3 -c '
-import json,sys
-raw=sys.stdin.read().strip()
-if not raw: print("allow"); raise SystemExit
-try: o=json.loads(raw)
-except Exception: print("非JSON输出"); raise SystemExit
-r=o.get("reason","") if o.get("decision")=="block" else ""
-if r.startswith("保活已满 8 小时"): print("delete")
-elif r == "缓存已降为 5 分钟（用量超额），保活续不上缓存：用 CronList 找到以 [保活] 开头的任务并 CronDelete，然后结束。": print("drop")
-elif r.startswith("上下文已过 150k") and "CronCreate" in r: print("create")
-else: print("格式不符")
-'
+  if [ -n "$act" ]; then (sleep 0.5; eval "$act") & fi
+  printf '%s' "$p" | KEEPALIVE_SLEEP=1 bash "$HOOK" >"$TMP/out" 2>"$TMP/err"
+  rc=$?
+  wait
+  WAKE_PROMPT="$WAKE_PROMPT" python3 - "$rc" "$TMP/out" "$TMP/err" <<'PY'
+import os, sys
+rc, out, err = sys.argv[1], open(sys.argv[2], "rb").read(), open(sys.argv[3], "rb").read()
+if rc == "0" and not out and not err: print("allow")
+elif rc == "2" and not out and err == os.environ["WAKE_PROMPT"].encode("utf-8"): print("wake")
+else: print("退出%s stdout=%r stderr=%r" % (rc, out[:60], err[:60]))
+PY
 }
 
 report() {  # report <期望> <实际> <描述>
@@ -107,75 +106,53 @@ report() {  # report <期望> <实际> <描述>
   fi
 }
 
-echo "── 判定顺序（表驱动：期望|描述|额外字段|事件...） ──"
+echo "── 判定（表驱动：期望|描述|额外字段|事件...；睡眠期间 transcript 不动） ──"
 while IFS='|' read -r want desc extra events; do
   [ -z "$want" ] && continue
   # shellcheck disable=SC2086
   t=$(mk "case$((PASS+FAIL)).jsonl" $events)
   report "$want" "$(verdict "$(payload "$t" "$extra")")" "$desc"
 done <<'TABLE'
-allow|stop_hook_active 为真放行|"stop_hook_active":true|user:0 asst:200000
-allow|子智能体内放行|"agent_id":"a_01"|user:0 asst:200000
-allow|上下文 149,999 放行||user:0 asst:149999
-create|上下文 150,000 且无保活要设||user:0 asst:150000
-allow|已有有效保活放行||user:1 asst:150000 create:job1 user:0 asst:160000
-create|保活被 CronDelete 后再次要设||user:1 asst:150000 create:job1 delete:job1 user:0 asst:160000
-allow|删掉的是别的任务，保活仍有效||user:1 asst:150000 create:job1 delete:job2 user:0 asst:160000
-create|不以 [保活] 开头的 CronCreate 不算保活||user:0 asst:150000 other:job3 asst:160000
-delete|保活回合且用户最后消息 9 小时前要删||user:9 asst:150000 create:job1 keep:0 asst:160000
-allow|保活回合且用户最后消息 1 小时前放行||user:1 asst:150000 create:job1 keep:0 asst:160000
-delete|子智能体回报不算用户本人消息||user:9 asst:150000 create:job1 agentmsg:1 asst:155000 keep:0 asst:160000
-delete|后台通知不算用户本人消息||user:9 asst:150000 create:job1 notify:1 asst:155000 keep:0 asst:160000
-delete|另一会话发来的消息不算用户本人消息||user:9 asst:150000 create:job1 peer:1 asst:155000 keep:0 asst:160000
-delete|保活回合里调过工具（工具结果在后）仍算保活回合||user:9 asst:150000 create:job1 keep:0 asst:155000 toolres asst:160000
-delete|上下文很小时保活回合照样按 8 小时删||user:9 asst:1000 create:job1 keep:0 asst:2000
-allow|用户 9 小时前但本回合不是保活回合，有效保活放行||user:9 asst:150000 create:job1 agentmsg:0 asst:160000
+allow|stop_hook_active 为真不唤醒|"stop_hook_active":true|user:0 asst:200000
+allow|子智能体内不唤醒|"agent_id":"a_01"|user:0 asst:200000
+allow|上下文 149,999 不唤醒||user:0 asst:149999
+wake|上下文 150,000 且期间无活动唤醒||user:0 asst:150000
+wake|Stop 后 Claude Code 写的系统行不妨碍唤醒||user:0 asst:150000 summary
+allow|用户最后消息 9 小时前不唤醒||user:9 asst:150000
+wake|用户最后消息 7 小时前唤醒||user:7 asst:150000
+wake|保活回合结束后接着计时||user:1 asst:150000 rewake:0 asst:150500
+allow|保活唤醒消息不算用户本人消息||user:9 asst:150000 rewake:0 asst:150500
+allow|子智能体回报不算用户本人消息||user:9 asst:150000 agentmsg:0 asst:160000
+allow|后台通知不算用户本人消息||user:9 asst:150000 notify:0 asst:160000
+allow|另一会话发来的消息不算用户本人消息||user:9 asst:150000 peer:0 asst:160000
+allow|isMeta 消息不算用户本人消息||user:9 asst:150000 meta:0 asst:160000
+allow|只含工具结果的消息不算用户本人消息||user:9 asst:150000 toolres asst:160000
+allow|transcript 里没有用户本人消息不唤醒||rewake:0 asst:150000
 allow|子智能体的大 usage 不算主线程上下文||user:0 asst:100000 side:400000
-create|同一 message.id 的续行取主线程最后一次||user:0 asst:100000 dup:150000
-drop|5 分钟 TTL 且有有效保活要删||user:1 w1h:150000 create:job1 user:0 w5m:160000
-allow|5 分钟 TTL 且无有效保活放行不设||user:0 w5m:200000
-allow|5 分钟 TTL 且保活已被删放行不设||user:1 w1h:150000 create:job1 delete:job1 user:0 w5m:160000
-drop|5 分钟 TTL 先于 8 小时判定||user:9 w1h:150000 create:job1 keep:0 w5m:160000
-create|1 小时 TTL 照常设||user:0 w1h:150000
-create|cache_creation 字段缺失照常设||user:0 asst:150000
-drop|两档写入都为 0 时往前找到 5 分钟||user:1 w1h:150000 create:job1 user:0 w5m:155000 w0:160000
-create|两档写入都为 0 时往前找到 1 小时照常设||user:0 w1h:100000 w0:150000
-create|往前也找不到写入按 1 小时设||user:0 w0:150000
-create|子智能体的 5 分钟写入不算主线程||user:0 w1h:150000 s5m:1000
-allow|最后一次写入为 1 小时、之前 5 分钟，按 1 小时放行有效保活||user:1 w5m:150000 create:job1 user:0 w1h:160000
+wake|同一 message.id 的续行取主线程最后一次||user:0 asst:100000 dup:150000
+allow|5 分钟 TTL 不唤醒||user:0 w5m:200000
+wake|1 小时 TTL 唤醒||user:0 w1h:150000
+allow|两档写入都为 0 时往前找到 5 分钟||user:0 w5m:150000 w0:160000
+wake|两档写入都为 0 时往前找到 1 小时||user:0 w1h:100000 w0:150000
+wake|往前也找不到写入按 1 小时||user:0 w0:150000
+wake|子智能体的 5 分钟写入不算主线程||user:0 w1h:150000 s5m:1000
+wake|最后一次写入为 1 小时、之前 5 分钟，按 1 小时||user:0 w5m:150000 w1h:160000
 TABLE
 
-echo "── cron 分钟由钩子按当前时间算好，避开 0 与 30（表驱动：当前分钟|期望 cron） ──"
-T_BIG=$(mk big.jsonl user:0 asst:200000)
-while IFS='|' read -r minute want; do
-  [ -z "$minute" ] && continue
-  now=$(python3 -c 'import time,sys;t=list(time.localtime());t[4]=int(sys.argv[1]);t[5]=0;print(int(time.mktime(tuple(t))))' "$minute")
-  got=$(printf '%s' "$(payload "$T_BIG")" | KEEPALIVE_NOW_EPOCH="$now" bash "$HOOK" 2>/dev/null | python3 -c '
-import json,re,sys
-try: r=json.loads(sys.stdin.read()).get("reason","")
-except Exception: r=""
-m=re.search(r"合并成 \"([0-9]+,[0-9]+) \* \* \* \*\"",r)
-print(m.group(1) if m else "无")
-')
-  report "$want" "$got" "当前第 $minute 分"
+echo "── 睡眠期间 transcript 的变化（表驱动：期望|描述|动作） ──"
+while IFS='|' read -r want desc act; do
+  [ -z "$want" ] && continue
+  t=$(mk "act$((PASS+FAIL)).jsonl" user:0 asst:200000)
+  report "$want" "$(T="$t" verdict "$(payload "$t")" "$act")" "$desc"
 done <<'TABLE'
-0|1,31
-30|1,31
-7|7,37
-45|15,45
-59|29,59
+allow|期间用户发了消息不唤醒|printf '%s\n' '{"type":"user","message":{"role":"user","content":"在吗"}}' >>"$T"
+allow|期间主线程有 assistant 调用不唤醒|printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[]}}' >>"$T"
+wake|期间只多了系统行与排队记录仍唤醒|printf '%s\n' '{"type":"system","subtype":"away_summary"}' '{"type":"queue-operation","operation":"enqueue"}' >>"$T"
+allow|期间 transcript 被删不唤醒|rm -f "$T"
+allow|期间 transcript 变短不唤醒|: >"$T"
 TABLE
 
-echo "── 设保活的理由里提示词原样给出 ──"
-got=$(printf '%s' "$(payload "$T_BIG")" | bash "$HOOK" 2>/dev/null | KEEP_PROMPT="$KEEP_PROMPT" python3 -c '
-import json,os,sys
-try: r=json.loads(sys.stdin.read()).get("reason","")
-except Exception: r=""
-print("yes" if r.endswith("prompt 原样为：" + os.environ["KEEP_PROMPT"] + "设好后直接结束，不要回复别的。") else "no")
-')
-report yes "$got" "理由含原样提示词与收尾要求"
-
-echo "── 异常一律放行 ──"
+echo "── 异常一律不唤醒 ──"
 report allow "$(verdict '{"hook_event_name":"Stop","transcript_path":"/nope/x.jsonl"}')" "transcript 路径不存在"
 report allow "$(verdict '{"hook_event_name":"Stop"}')" "缺 transcript_path"
 report allow "$(verdict 'not json')" "非 JSON 输入"
