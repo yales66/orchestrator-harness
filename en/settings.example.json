@@ -114,6 +114,11 @@
             "type": "command",
             "command": "bash $HOME/.claude/hooks/reply-gate.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/hooks/keepalive-gate.sh",
+            "timeout": 10
           }
         ]
       }
