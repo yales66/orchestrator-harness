@@ -113,7 +113,7 @@ Ask for `zh/` instead to get the Chinese copy. The steps below are written for t
 6. Install `CLAUDE.md` only when the user explicitly asks for it. When `~/.claude/CLAUDE.md` already exists, ask the user whether to overwrite it or merge the two before changing it.
 7. Tell the user to start a new Claude Code session, since the hooks and skills take effect only in sessions started after the install.
 
-The playbook and `CLAUDE.md` also route to `grilling`, `write-pr`, `prose-discipline`, `tdd-watch-it-fail`, and `debug-root-cause`. Those skills are not included here, either because they are third-party or built mainly on third-party material, or because they only fit my own setup; install your own equivalents or remove those routes. The rule on when the main thread merges its own pull request does not depend on `write-pr`, because §1 of the playbook states it in full. To make every `gh pr merge` in a repository wait for your approval, mark that repository as production with `git config claude.production true`, run inside it; `git config --unset claude.production` removes the mark.
+The playbook and `CLAUDE.md` also route to `write-pr`, `prose-discipline`, `tdd-watch-it-fail`, and `debug-root-cause`. Those skills are not included here, either because they are third-party or built mainly on third-party material, or because they only fit my own setup; install your own equivalents or remove those routes. The rule on when the main thread merges its own pull request does not depend on `write-pr`, because §1 of the playbook states it in full. To make every `gh pr merge` in a repository wait for your approval, mark that repository as production with `git config claude.production true`, run inside it; `git config --unset claude.production` removes the mark.
 
 ## Tests
 
@@ -169,7 +169,7 @@ bash scripts/ci-local.sh
 
 ## License
 
-MIT. See `LICENSE`.
+MIT. See `LICENSE`. `skills/grilling` in each copy is adapted from [mattpocock/skills](https://github.com/mattpocock/skills), released under MIT with copyright held by its original author; see the `LICENSE` in that directory.
 
 ## Data sources
 

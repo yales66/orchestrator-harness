@@ -113,7 +113,7 @@
 6. 只有用户明确要求时才安装 `CLAUDE.md`。`~/.claude/CLAUDE.md` 已经存在时，改动之前先问用户是覆盖还是把两份合并。
 7. 告诉用户启动一个新的 Claude Code 会话，因为钩子与技能只在安装之后启动的会话里生效。
 
-编排手册与 `CLAUDE.md` 还会路由到 `grilling`、`write-pr`、`prose-discipline`、`tdd-watch-it-fail` 与 `debug-root-cause`。这些技能没有收录在这里，原因要么是它们来自第三方或主要基于第三方材料构建，要么是它们只适合我自己的环境；请安装你自己的等价技能，或删掉这些路由。主线程何时合并自己开的拉取请求，这条规则不依赖 `write-pr`，编排手册 §1 已经写全。想让某个仓库里的每次 `gh pr merge` 都等你同意，就在该仓库里运行 `git config claude.production true`，把它标成生产仓库；`git config --unset claude.production` 取消标记。
+编排手册与 `CLAUDE.md` 还会路由到 `write-pr`、`prose-discipline`、`tdd-watch-it-fail` 与 `debug-root-cause`。这些技能没有收录在这里，原因要么是它们来自第三方或主要基于第三方材料构建，要么是它们只适合我自己的环境；请安装你自己的等价技能，或删掉这些路由。主线程何时合并自己开的拉取请求，这条规则不依赖 `write-pr`，编排手册 §1 已经写全。想让某个仓库里的每次 `gh pr merge` 都等你同意，就在该仓库里运行 `git config claude.production true`，把它标成生产仓库；`git config --unset claude.production` 取消标记。
 
 ## 测试
 
@@ -169,7 +169,7 @@ bash scripts/ci-local.sh
 
 ## 许可证
 
-MIT。见 `LICENSE`。
+MIT。见 `LICENSE`。两份副本里的 `skills/grilling` 改写自 [mattpocock/skills](https://github.com/mattpocock/skills)，按 MIT 发布，版权归原作者，见该目录下的 `LICENSE`。
 
 ## 数据来源
 
