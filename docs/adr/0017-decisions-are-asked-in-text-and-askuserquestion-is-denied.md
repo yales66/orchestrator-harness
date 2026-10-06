@@ -18,9 +18,9 @@ When AskUserQuestion is listed under `permissions.deny`, the tool disappears fro
 
 `settings.example.json` in both copies lists `"AskUserQuestion"` under `permissions.deny`.
 
-The playbook asks every decision in text. Before a step that cannot be taken back, the agent asks for confirmation in a text question and ends the turn to wait for the reply. At a fork whose choice turns on preferences or constraints only the user knows, it first finishes the parts that do not depend on the answer and can be undone, then asks in a text question and ends the turn. Each option of a pending item is numbered, so the user can reply with the number.
+The playbook asks every decision in text. Before a step that cannot be taken back, the agent asks for confirmation in a text question and ends the turn to wait for the reply. At a fork whose choice turns on preferences or constraints only the user knows, it first finishes the parts that do not depend on the answer and meet the playbook's wrap-up criteria (undoable, not external, no paid service), then asks in a text question and ends the turn. Each option of a pending item is numbered, so the user can reply with the number.
 
-A turn that a background notification, a subagent's report or a keepalive wake-up opens after the question is asked is not a reply. The agent handles only that notification, leaves the pending items to the user as they stand, and does not choose for the user.
+A turn that a background notification, a subagent's report or a keepalive wake-up opens after the question is asked is not a reply. The agent handles only that notification, leaves the pending items to the user as they stand, and does not choose for the user. When that turn has substantive output, it ends with one sentence reminding the user of the numbered items still open; a keepalive wake-up still gets only the period its prompt asks for.
 
 ## Consequences
 
@@ -39,11 +39,11 @@ The handoff skill's extraction of choice answers and the keepalive's counting of
 | Source | What it supports |
 |---|---|
 | `en/settings.example.json`, `permissions.deny` | AskUserQuestion is denied |
-| `en/orchestrator-playbook.md`, §1, the table rows on actions that cannot be taken back and on a fork in direction | Confirmation and forks are asked in text, after the parts that do not depend on the answer, and the turn ends |
+| `en/orchestrator-playbook.md`, §1, the table rows on actions that cannot be taken back and on a fork in direction | Confirmation and forks are asked in text, after the parts that do not depend on the answer and meet the wrap-up criteria, and the turn ends |
 | `en/orchestrator-playbook.md`, §1, the paragraph on decisions that go to the user | Numbered options, and turns opened by notifications, subagent reports or keepalive wake-ups are not replies |
-| The author's Claude Code session transcripts | Choice questions answered after more than 60 minutes: 4 of 5 followed by a full cache rewrite; after 5 to 55 minutes: 95 of 96 read from the cache |
+| The author's Claude Code session transcripts, sampled 2026-10-06 | Choice questions answered after more than 60 minutes: 4 of 5 followed by a full cache rewrite; after 5 to 55 minutes: 95 of 96 read from the cache |
 | Claude Code 2.1.291, the choice-question timeout `askUserQuestionTimeout` / `CLAUDE_AFK_TIMEOUT_MS` | The countdown keeps returning to zero while the terminal has focus |
-| A session run with AskUserQuestion under `permissions.deny` | The tool is removed from the model's tool list |
+| A session run with AskUserQuestion under `permissions.deny`, 2026-10-06 | The tool is removed from the model's tool list |
 | [ADR 0011](0011-wrap-up-finishes-in-session-at-any-watermark.md) | The handoff skill already asks its pending question in plain text, because a scheduled wake-up does not fire while AskUserQuestion waits |
 | [ADR 0014](0014-idle-sessions-past-150k-keep-their-prompt-cache-warm-with-an-async-rewake.md) and [ADR 0015](0015-keepalive-keeps-timing-after-its-own-wake-up-and-skips-headless-sessions.md) | The keepalive that covers a session after its turn ends, and its counting of choice answers |
 | [ADR 0006](0006-ask-the-user-only-where-the-answer-is-theirs.md) | The detail this ADR supersedes |
