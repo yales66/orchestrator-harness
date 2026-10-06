@@ -4,24 +4,24 @@
 
 我每一次编码会话都运行在其中的一套 Claude Code 钩子、技能与编排规则。
 
-这套框架分成两份可以各自独立安装的完整副本：英文版在 `en/`，中文版在 `zh/`，中文是我与 Claude 协作时使用的语言。两份的规则相同，译文尽可能贴近原意。两份里的钩子脚本与技能辅助脚本完全一样。脚本内的注释是中文，Claude 都能读懂；钩子的提示信息、`finalize.sh` 的报错与 `extract.py` 输出的小标题也是中文；生产合并闸门的理由出现在用户要回答的确认框里，所以是中英双语的一句话。本说明文件的英文版是仓库根目录的 `README.md`。
+这套框架分成两份可以各自独立安装的完整副本：英文版在 `en/`，中文版在 `zh/`，中文是我与 Claude 协作时使用的语言。两份的规则相同，译文尽可能贴近原意。两份里的钩子脚本、技能辅助脚本与 `agents/*.md` 里的子智能体定义逐字节相同，子智能体定义是英文。钩子的提示信息与脚本注释大多是中文，Claude 都能读懂，`finalize.sh` 的报错与 `extract.py` 输出的小标题也是中文；少数是英文，例如提交钩子的拒绝理由、工作树钩子的提示与注释，以及 handoff 脚本的注释；生产合并闸门的理由出现在用户要回答的确认框里，所以是中英双语的一句话。本说明文件的英文版是仓库根目录的 `README.md`。
 
 ## 设计目标
 
 这套框架为长程的智能体编程而建，目标是尽可能少的人工介入。
 
-1. **子智能体上下文精简。** 编排规则只通过 SessionStart 钩子送达主线程；每个子智能体都会加载的 `CLAUDE.md` 只放每个会话都需要的规则。每次委派都是一份目标驱动的派发说明：带可验证验收标准的目标、文件范围、已知上下文、约束、一条自检命令，以及有界的返回格式。子智能体从结论起步，不必重新摸索，也不能再派出自己的子智能体。
+1. **子智能体上下文精简。** 编排规则只通过 SessionStart 钩子送达主线程；每个子智能体都会加载的 `CLAUDE.md` 只放每个会话都需要的规则。每次委派都是一份目标驱动的派发说明。落盘型派发写全六项：带可验证验收标准的目标、文件范围、已知上下文、约束、一条自检命令，以及有界的返回格式；只读型派发写其中四项，即目标、文件范围、已知上下文与有界的返回格式。子智能体从结论起步，不必重新摸索，也不能再派出自己的子智能体。
 2. **长程会话。** 主线程保留决策与结论，把探索、审查与实现委派出去，让上下文预算撑得更久。已有上下文能做完的收尾，例如提交、推送、开拉取请求与合并，不论水位都在当前会话做完。上下文窗口渐满时，上下文水位闸门拦下主线程结束这一轮的尝试，让它权衡是否换会话：接下来是新的大块工作时，由 handoff 技能从会话记录与 git 状态整份生成交接文件，主线程提示用户换新会话，新会话从这份交接文件接续。
-3. **人只在决策点介入。** 编排手册的设计是只把答案属于用户的问题交给用户。交易、动用资金、删数据这类收不回的动作，可逆的准备照做，只在收不回的那一步之前请用户确认。方向有分叉时，只有各分支做出的东西实质不同、且取舍取决于只有用户知道的偏好或约束，才去问用户；否则按推荐分支做，并在开头一句话说明选了哪支。收尾时的下一步只要在用户当前目标之内、做错了可逆、不对外也不调用付费服务，就直接做完再汇报。用户给出的持续授权只覆盖授权时所指的对象与改动，在本会话内有效，用户改口即撤销。确实要请用户拍板时，每个待定项都写清背景、各选项的后果与推荐。回复以提议下一步的问句收尾时，Stop 钩子 `reply-gate` 拦停一次，并把上述判据写进拦截理由。改动影响用户看得见的产物时，交付前先截图对照受影响的状态，并给出能直接打开的预览链接或一行启动命令；面向他人的文稿交付前，先交给一个不带本轮语境的复核子智能体通读。
+3. **人只在决策点介入。** 编排手册的设计是只把答案属于用户的问题交给用户。交易、动用资金、删数据这类收不回的动作，可逆的准备照做，只在收不回的那一步之前请用户确认。每个决策都用文字提问并结束本轮，`AskUserQuestion` 工具在 `permissions.deny` 里被拒绝，所以用户考虑期间这一轮已经结束，等待由缓存保活照常覆盖（见 [ADR 0017](../docs/zh/adr/0017-decisions-are-asked-in-text-and-askuserquestion-is-denied.md)）。方向有分叉时，只有各分支做出的东西实质不同、且取舍取决于只有用户知道的偏好或约束，才去问用户；否则按推荐分支做，并在开头一句话说明选了哪支。收尾时的下一步只要在用户当前目标之内、做错了可逆、不对外也不调用付费服务，就直接做完再汇报。用户给出的持续授权只覆盖授权时所指的对象与改动，在本会话内有效，用户改口即撤销。确实要请用户拍板时，每个待定项都写清背景、各选项的后果与推荐。回复以提议下一步的问句收尾时，Stop 钩子 `reply-gate` 拦停一次，并把上述判据写进拦截理由。改动影响用户看得见的产物时，交付前先截图对照受影响的状态，并给出能直接打开的预览链接或一行启动命令；面向他人的文稿交付前，先交给一个不带本轮语境的复核子智能体通读。
 
 ## 架构
 
-图里画的是一轮工作怎样运行。会话开始、`/clear` 与压缩之后，SessionStart 钩子把编排手册注入主线程，子智能体收不到，它凭 `CLAUDE.md` 和拿到的派发说明干活，完成后交回有界回报。用户本人键入的消息提到生产模式时，UserPromptSubmit 钩子给主线程注入一句说明，讲怎样设置与查看仓库的生产标记。两条线程的每次工具调用都先经过 PreToolUse。调用属于子智能体内的嵌套派发、`git commit --no-verify`、会打印密钥值的调用、直接改写 `HANDOFF.md`，或 researcher、retriever 子智能体改动、移动、删除已有文件时会被拒绝，拒绝理由回到发起调用的线程，线程换一种做法。researcher 与 retriever 子智能体读文件、跑命令与新建文件都放行。在标成生产的仓库里执行 `gh pr merge`，要等用户当场同意才执行。放行的调用交给工具执行，之后 PostToolUse 在改了规则文件时把规则文件提醒作为附加上下文送回发起调用的线程，在进入新工作树时把主检出目录中的 `CLAUDE.md`、`node_modules` 与 `.env*` 软链进这个工作树，不回话。主线程想结束这一轮时，由两个 Stop 钩子决定这一轮能否结束。回复出口在回复末句是提议问句时拦一次，主线程随后要么直接把提议的那一步做掉，要么在确实需要用户拍板时按背景、各选项的后果与推荐的格式重新提问；设置 `REPLY_LANG=zh` 时（仅 `zh/` 副本的安装启用），较长的回复主要不是中文也会被拦一次，主线程用中文重写。上下文水位闸门在用量过上下文窗口的 35% 时每个会话提醒一次，没有会话暂存目录时则每轮提醒，过 40% 时拦一次。主线程随后把已有上下文能做完的收尾做完，接下来是新的大块工作时用 handoff 技能生成交接文件，并提示用户换新会话。此后以上次拦截时的水位为基准，用量每再涨 5 个百分点，闸门就再拦一次，主线程立即生成交接文件。新会话读这份交接文件接着做。两个闸门都不会拦刚被拦下而续跑的那一轮，所以这一轮再想停就放行；图中橙色箭头标出的，就是控制回到线程的每一条路径。
+图里画的是一轮工作怎样运行。会话开始、`/clear` 与压缩之后，SessionStart 钩子把编排手册注入主线程，子智能体收不到，它凭 `agents/*.md` 里自己的定义、`CLAUDE.md` 和拿到的派发说明干活，完成后交回有界回报。用户本人键入的消息提到生产模式时，UserPromptSubmit 钩子给主线程注入一句说明，讲怎样设置与取消仓库的生产标记。两条线程的每次工具调用都先经过 PreToolUse。调用属于子智能体内的嵌套派发、`git commit --no-verify`、会打印密钥值的调用、直接改写 `HANDOFF.md`，或 researcher、retriever 子智能体改动、移动、删除已有文件时会被拒绝，拒绝理由回到发起调用的线程，线程换一种做法。researcher 与 retriever 子智能体读文件、跑命令与新建文件都放行。在标成生产的仓库里执行 `gh pr merge`，要等用户当场同意才执行。放行的调用交给工具执行，之后 PostToolUse 在改了规则文件时把规则文件提醒作为附加上下文送回发起调用的线程，在进入新工作树时把主检出目录中的 `CLAUDE.md`、`node_modules` 与 `.env*` 软链进这个工作树，不回话。Stop 下注册了三个钩子。主线程想结束这一轮时，由其中的回复出口与上下文水位闸门两个同步决定这一轮能否结束。回复出口在回复末句是提议问句时拦一次，主线程随后要么直接把提议的那一步做掉，要么在确实需要用户拍板时按背景、各选项的后果与推荐的格式重新提问；设置 `REPLY_LANG=zh` 时（仅 `zh/` 副本的安装启用），较长的回复主要不是中文也会被拦一次，主线程用中文重写。上下文水位闸门在用量过上下文窗口的 35% 时每个会话提醒一次，没有会话暂存目录时则每轮提醒，过 40% 时拦一次。主线程随后把已有上下文能做完的收尾做完，接下来是新的大块工作时用 handoff 技能生成交接文件，并提示用户换新会话。此后以上次拦截时的水位为基准，用量每再涨 5 个百分点，闸门就再拦一次，主线程立即生成交接文件。新会话读这份交接文件接着做。这两个闸门都不会拦刚被拦下而续跑的那一轮，所以各只拦一次，这一轮再想停就放行。第三个钩子缓存保活不拦停：它带 `asyncRewake` 注册，在这一轮结束后于后台计时，主线程上下文达到 150,000 词元、会话空闲满 50 分钟时以退出码 2 从后台唤醒主线程，主线程只回一个句点，一小时的提示词缓存因此不过期。每次唤醒的那一轮结束时照常重新计时，直到距用户本人最后一条消息满 8 小时。图中橙色箭头标出控制回到线程的路径：拒绝、工具结果、两个同步闸门的拦截与缓存保活的唤醒。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../docs/architecture.zh.dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="../docs/architecture.zh.light.svg">
-  <img src="../docs/architecture.zh.light.svg" alt="架构图，画的是一轮工作怎样运行。会话开始、/clear 与压缩之后，SessionStart 钩子把编排手册注入主线程，子智能体收不到。用户本人键入的消息提到生产模式时，UserPromptSubmit 钩子给主线程注入一句说明，讲怎样设置与查看仓库的生产标记。主线程向子智能体发出派发说明，子智能体交回有界回报。两条线程的每次工具调用在工具执行之前都经过 PreToolUse：子智能体内的嵌套派发、git commit --no-verify、会打印密钥值的调用、直接改写 HANDOFF.md，以及 researcher 或 retriever 子智能体改动、移动或删除已有文件的操作都被拒绝，researcher 与 retriever 子智能体读文件、跑命令与新建文件都放行；在标成生产的仓库里执行 gh pr merge，要等用户当场同意才执行；拒绝理由回到发起调用的线程，线程换一种做法；放行的调用交给工具执行。工具执行之后，PostToolUse 在改了规则文件时把规则文件提醒作为附加上下文送回发起调用的线程，在进入新工作树时把主检出目录中的 CLAUDE.md、node_modules 与 .env* 软链进这个工作树，不回话。主线程想结束这一轮时经过 Stop 钩子，都放行则这一轮结束。上下文水位闸门过 35% 时每个会话提醒一次并放行，没有会话暂存目录时则每轮提醒，过 40% 拦一次，此后以上次拦截时的水位为基准，每再涨 5 个百分点就再拦一次；回复出口在回复末句是提议问句时拦一次，仅 zh/ 副本的安装里，较长的回复主要不是中文时也拦一次；主线程上下文达到 150,000 词元后，缓存保活在后台等待，50 分钟里没有新的一轮就唤醒主线程只回一个句点，用户离开期间提示词缓存因此不过期。拦下都回到主线程。被回复出口拦下，主线程要么直接把提议的那一步做掉，要么在确实需要用户拍板时按背景、各选项的后果与推荐的格式重新提问，因语言被拦时用中文重写。被水位闸门第一次拦下，已有上下文能做完的收尾就做完，接下来是新的大块工作时用 handoff 技能生成交接文件，提示用户换新会话；此后每次再被拦都立即生成交接文件。新会话读交接文件接着做。所有 Stop 钩子都不会拦刚被拦下而续跑的那一轮，所以这一轮再想停就放行。">
+  <img src="../docs/architecture.zh.light.svg" alt="架构图，画的是一轮工作怎样运行。会话开始、/clear 与压缩之后，SessionStart 钩子把编排手册注入主线程，子智能体收不到。用户本人键入的消息提到生产模式时，UserPromptSubmit 钩子给主线程注入一句说明，讲怎样设置与取消仓库的生产标记。主线程向子智能体发出派发说明，子智能体凭 agents/*.md 里设定了推理强度的定义、CLAUDE.md 与派发说明干活，交回有界回报。两条线程的每次工具调用在工具执行之前都经过 PreToolUse：子智能体内的嵌套派发、git commit --no-verify、会打印密钥值的调用、直接改写 HANDOFF.md，以及 researcher 或 retriever 子智能体改动、移动或删除已有文件的操作都被拒绝，researcher 与 retriever 子智能体读文件、跑命令与新建文件都放行；在标成生产的仓库里执行 gh pr merge，要等用户当场同意才执行；拒绝理由回到发起调用的线程，线程换一种做法；放行的调用交给工具执行。工具执行之后，PostToolUse 在改了规则文件时把规则文件提醒作为附加上下文送回发起调用的线程，在进入新工作树时把主检出目录中的 CLAUDE.md、node_modules 与 .env* 软链进这个工作树，不回话。主线程想结束这一轮时经过 Stop 钩子，都放行则这一轮结束，其中两个是同步闸门。上下文水位闸门过 35% 时每个会话提醒一次并放行，没有会话暂存目录时则每轮提醒，过 40% 拦一次，此后以上次拦截时的水位为基准，每再涨 5 个百分点就再拦一次；回复出口在回复末句是提议问句时拦一次，仅 zh/ 副本的安装里，较长的回复主要不是中文时也拦一次。这两个闸门拦下都回到主线程。被回复出口拦下，主线程要么直接把提议的那一步做掉，要么在确实需要用户拍板时按背景、各选项的后果与推荐的格式重新提问，因语言被拦时用中文重写。被水位闸门第一次拦下，已有上下文能做完的收尾就做完，接下来是新的大块工作时运行 handoff 技能，由 researcher 子智能体写出 HANDOFF.new.md，再由 finalize.sh 落位成交接文件，并提示用户换新会话；此后每次再被拦都立即生成交接文件。新会话读交接文件接着做。两个同步闸门都不会拦刚被拦下而续跑的那一轮，所以各只拦一次，这一轮再想停就放行。第三个 Stop 钩子缓存保活不拦停：它在这一轮结束后于后台计时，主线程上下文达到 150,000 词元且 50 分钟里没有新的一轮时，唤醒主线程只回一个句点，用户离开期间一小时的提示词缓存因此不过期；每次唤醒后照常重新计时，直到距用户本人最后一条消息满 8 小时。">
 </picture>
 
 ## 测量了什么
@@ -32,9 +32,9 @@
 
 | 测量 | 结果 | 复跑 |
 |---|---|---|
-| 钩子回归测试 | 每个副本 631 个用例全部通过 | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
-| 交接脚本测试 | 每个副本 36 个 pytest 用例全部通过 | `python3 -m pytest -p no:cacheprovider en/skills/handoff/scripts`；第三方 pytest 插件加载报错时，在命令前加 `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` |
-| 钩子变异测试，[eval/hook-mutations](../eval/hook-mutations/README.md) | 往钩子里植入的 54 个缺陷，测试首轮抓住 42 个，为存活的缺陷补上边界用例后抓住 54 个；另有 35 个只照钩子头注释、不看测试写出的留出集缺陷，测试抓住 30 个，这是无偏估计 | `HM_MANIFEST=eval/hook-mutations/holdout.tsv HM_OUT=eval/hook-mutations/holdout-results.md bash eval/hook-mutations/run.sh` |
+| 钩子回归测试 | 每个副本 636 个用例全部通过 | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
+| 技能脚本测试 | 每个副本 38 个 pytest 用例全部通过，其中交接脚本 36 个，feature-sharding 脚本 2 个 | `python3 -m pytest -p no:cacheprovider en/skills/handoff/scripts en/skills/feature-sharding/scripts`；第三方 pytest 插件加载报错时，在命令前加 `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` |
+| 钩子变异测试，[eval/hook-mutations](../eval/hook-mutations/README.md) | 往钩子里植入的 54 个缺陷，测试首轮抓住 42 个，为存活的缺陷补上边界用例后抓住 54 个；另有 35 个只照钩子头注释、不看测试写出的留出集缺陷，测试抓住 30 个，这是无偏估计；两套缺陷都只植入最早的 9 个钩子，后加的 4 个钩子没有变异体 | `HM_MANIFEST=eval/hook-mutations/holdout.tsv HM_OUT=eval/hook-mutations/holdout-results.md bash eval/hook-mutations/run.sh` |
 | 静态上下文，[eval/static-context](../eval/static-context/README.md) | 编排手册经钩子注入时，每个子智能体的首次请求输入是 10,186 词元，写进 `CLAUDE.md` 时是 13,529 词元（en/ 副本，Claude Code 2.1.286） | `bash eval/static-context/run.sh` |
 | 回复出口回放，[eval/reply-gate-replay](../eval/reply-gate-replay/README.md) | 在回复出口上线前写成的 2,734 条收尾回复上，它的收尾提议规则精确率 68.5%，召回率 31.7% | `python3 eval/reply-gate-replay/score.py --data "$DATA"`，其中 `DATA` 是存放会话记录与标注的私有目录 |
 
@@ -60,8 +60,8 @@
 | `hooks/` | 在 `settings.json` 中注册的钩子，均为 `.sh` 脚本；每个钩子都从标准输入读取钩子 JSON |
 | `hooks/tests/` | 覆盖全部十三个钩子的回归测试 |
 | `agents/` | 三个子智能体的定义，各自在开头的配置字段里设定推理强度：`researcher`（强度 `high`）接需要判断的只读审查、诊断、调研与草拟，`retriever`（强度 `medium`）接只读检索与抽取，`implementer`（强度 `medium`）接设计决定已由派发说明定死的实现。`researcher` 与 `retriever` 只在派发说明给定的路径或系统临时目录下新建文件，不改已有文件。环境变量 `CLAUDE_CODE_EFFORT_LEVEL` 一旦设置，就会盖过这三个定义里的推理强度 |
-| `skills/` | 为本框架编写的技能，由 Claude Code 按需加载。`handoff` 技能的辅助脚本及其 pytest 测试放在 `skills/handoff/scripts/` |
-| `settings.example.json` | 注册全部钩子的 `hooks` 配置块，路径位于 `$HOME/.claude` 之下 |
+| `skills/` | 为本框架编写的技能，由 Claude Code 按需加载。`handoff` 与 `feature-sharding` 两个技能的辅助脚本及其 pytest 测试分别放在 `skills/handoff/scripts/` 与 `skills/feature-sharding/scripts/` |
+| `settings.example.json` | 注册全部钩子的 `hooks` 配置块，路径位于 `$HOME/.claude` 之下，以及拒绝 `AskUserQuestion` 的 `permissions.deny` 列表 |
 
 ## 钩子
 
@@ -88,6 +88,8 @@
 | `rule-file-editing` | 编辑 `CLAUDE.md`、`SKILL.md` 等指令文件时的纪律：按改动如何改变运行时行为来裁决每处改动，把例外写成分支，并把删除以及新建的规则文件交给独立复核者 |
 | `memory-audit` | 裁定哪些 Claude Code 记忆条目保留、合并或删除，并重建索引 |
 | `handoff` | 整份生成 `HANDOFF.md`：`scripts/extract.py` 从会话记录抽出用户给过的每一条输入与 git 状态，一个不带本会话语境的 `researcher` 写出草稿，主线程审阅，未完成项不对时让同一个 `researcher` 重写，`scripts/finalize.sh` 把它落位并归档旧版。第 0 步在只剩收尾时不生成交接；有问题等用户拍板时设一个 50 分钟后的一次性唤醒，到时还没答复就生成交接。50 分钟的前提是会话的提示词缓存一小时后过期（2026 年 10 月 Claude Code 的情况），这样交接趁缓存还热时写完；缓存时长不同时，把第 0 步里的 50 分钟改成该时长减 10 分钟；缓存不超过 10 分钟时，第 0 步不设唤醒，直接生成交接 |
+| `feature-sharding` | 规划可能装不进主线程剩余预算的多模块工作：按测得的预算与接缝路由，按工作量分箱，要么在当前会话按波次并行派子智能体，要么写出由用户拉起各个独立会话的会话包 |
+| `grilling` | 围绕一个计划或决定逐轮追问用户，每个问题附推荐答案，直到双方理解一致；改写自 [mattpocock/skills](https://github.com/mattpocock/skills) |
 
 ## 两个值得细看的机制
 
@@ -109,7 +111,7 @@
 2. 从用户指定的副本取源文件，即 `en/` 或 `zh/`；请求里两者都没提时先问用户。
 3. 覆盖 `~/.claude/` 下任何已有文件之前（包括 `settings.json`），先把它复制到一个备份位置，并告诉用户备份放在哪里。
 4. 把 `hooks/*.sh` 复制到 `~/.claude/hooks/`，不复制 `hooks/tests/`；把 `skills/` 下的每个目录复制到 `~/.claude/skills/`，不复制测试文件 `skills/*/scripts/test_*.py`；把 `agents/*.md` 复制到 `~/.claude/agents/`；把 `orchestrator-playbook.md` 复制到 `~/.claude/`。编排手册必须位于 `hooks/` 的直接上级目录，因为 SessionStart 钩子相对自身位置来定位它。
-5. 把 `settings.example.json` 的 `hooks` 配置块合并进 `~/.claude/settings.json`，该文件不存在时就新建。其余键与已有的钩子条目全部保留，同一事件下命令已经注册过的钩子不重复添加。
+5. 把 `settings.example.json` 的 `hooks` 配置块合并进 `~/.claude/settings.json`，该文件不存在时就新建。其余键与已有的钩子条目全部保留，同一事件下命令已经注册过的钩子不重复添加。再把它 `permissions.deny` 列表里的每一项追加到 `~/.claude/settings.json` 的 `permissions.deny` 列表，已有的项保留，已列出的项不重复添加。
 6. 只有用户明确要求时才安装 `CLAUDE.md`。`~/.claude/CLAUDE.md` 已经存在时，改动之前先问用户是覆盖还是把两份合并。
 7. 告诉用户启动一个新的 Claude Code 会话，因为钩子与技能只在安装之后启动的会话里生效。
 
@@ -123,10 +125,10 @@
 for t in hooks/tests/*.test.sh; do bash "$t"; done
 ```
 
-每个钩子测试都会打印 `PASS=<n> FAIL=<n>`，任何一项失败都以非零状态退出。十三个测试在每个副本里共有 631 个用例。handoff 技能的脚本带 pytest 测试，每个副本 36 个用例，在 `en/` 或 `zh/` 目录下这样运行：
+每个钩子测试都会打印 `PASS=<n> FAIL=<n>`，任何一项失败都以非零状态退出。十三个测试在每个副本里共有 636 个用例。handoff 与 feature-sharding 两个技能的脚本带 pytest 测试，每个副本分别有 36 个与 2 个用例，在 `en/` 或 `zh/` 目录下这样运行：
 
 ```bash
-python3 -m pytest -p no:cacheprovider skills/handoff/scripts
+python3 -m pytest -p no:cacheprovider skills/handoff/scripts skills/feature-sharding/scripts
 ```
 
 第三方 pytest 插件加载报错时，在命令前加 `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`。
@@ -137,7 +139,7 @@ python3 -m pytest -p no:cacheprovider skills/handoff/scripts
 bash scripts/check-parity.sh
 ```
 
-持续集成在每次推送与拉取请求时运行。它在 Ubuntu 与 macOS 上运行两份副本的钩子测试，每份 631 个用例，用 pytest 运行两份副本的技能脚本测试，用 shellcheck 检查钩子、钩子测试、技能的 shell 脚本与仓库脚本，并运行中英文副本的一致性检查。推送前想在本机一次跑完这四项检查，可以在仓库根目录下运行下面的命令。它需要装有 pytest 的 `python3`，以及 `jq`、`git` 与 shellcheck，都在 `PATH` 上，并且只覆盖你本机的操作系统和用来运行它的那个 bash；在 Mac 上用 `/bin/bash scripts/ci-local.sh` 运行，就和持续集成用的 bash 3.2 一致。一致性检查只看已纳入 git 跟踪的文件，新建的文件先 `git add` 再运行：
+持续集成在每次推送与拉取请求时运行。它在 Ubuntu 与 macOS 上运行两份副本的钩子测试，每份 636 个用例，用 pytest 运行两份副本的技能脚本测试，用 shellcheck 检查钩子、钩子测试、技能的 shell 脚本与仓库脚本，并运行中英文副本的一致性检查。推送前想在本机一次跑完这四项检查，可以在仓库根目录下运行下面的命令。它需要装有 pytest 的 `python3`，以及 `jq`、`git` 与 shellcheck，都在 `PATH` 上，并且只覆盖你本机的操作系统和用来运行它的那个 bash；在 Mac 上用 `/bin/bash scripts/ci-local.sh` 运行，就和持续集成用的 bash 3.2 一致。一致性检查只看已纳入 git 跟踪的文件，新建的文件先 `git add` 再运行：
 
 ```bash
 bash scripts/ci-local.sh
@@ -159,9 +161,11 @@ bash scripts/ci-local.sh
 | [ADR 0010：交接文件由 handoff 技能整份生成，钩子禁止手改](../docs/zh/adr/0010-handoffs-are-generated-whole-by-the-handoff-skill.md) | 交接文件怎样生成，为什么从不打补丁 |
 | [ADR 0011：收尾不论水位都在当前会话做完，待用户拍板的问题在缓存过期前设唤醒](../docs/zh/adr/0011-wrap-up-finishes-in-session-at-any-watermark.md) | 会话何时不交接，等用户时又何时交接 |
 | [ADR 0012：非生产仓库里合并本任务开的拉取请求属于可撤回，生产仓库由钩子先问用户](../docs/zh/adr/0012-merging-own-pr-is-undoable-outside-production.md) | 主线程何时合并自己开的拉取请求 |
-| [ADR 0013：上下文过 150k 的会话用 30 分钟心跳保住缓存](../docs/zh/adr/0013-sessions-past-150k-keep-their-prompt-cache-warm.md) | 会话何时设保活，保活又怎样结束 |
+| [ADR 0013：上下文过 150k 的会话用 30 分钟心跳保住缓存](../docs/zh/adr/0013-sessions-past-150k-keep-their-prompt-cache-warm.md) | 已被 ADR 0014 取代。会话何时设保活，保活又怎样结束 |
 | [ADR 0014：上下文过 150k 的空闲会话在 50 分钟后由异步唤醒保住缓存](../docs/zh/adr/0014-idle-sessions-past-150k-keep-their-prompt-cache-warm-with-an-async-rewake.md) | 空闲会话何时被唤醒以保住缓存，以及为什么它取代了 ADR 0013 的 30 分钟心跳 |
 | [ADR 0015：保活在自己的唤醒之后照常计时，-p 无头会话不计时](../docs/zh/adr/0015-keepalive-keeps-timing-after-its-own-wake-up-and-skips-headless-sessions.md) | 保活为什么不看 `stop_hook_active`、不在 `-p` 运行里计时，并把选择题的作答算作用户本人的消息 |
+| [ADR 0016：feature-sharding 随仓库发布](../docs/zh/adr/0016-feature-sharding-ships-with-the-harness.md) | 为什么随框架发布 `feature-sharding`，编排手册何时把多模块工作交给它 |
+| [ADR 0017：拍板改为文字提问，AskUserQuestion 被拒用](../docs/zh/adr/0017-decisions-are-asked-in-text-and-askuserquestion-is-denied.md) | 怎样请用户拍板，以及为什么拒用选择题工具 |
 | [评测：方法与局限](../docs/zh/evaluation.md) | 本框架主张什么、不主张什么，以及受控实验要花多少 |
 | [静态上下文测量](../eval/static-context/README.md) | 怎样运行这项测量，每组配置安装了什么 |
 | [钩子变异测试](../eval/hook-mutations/README.md) | 怎样用植入的缺陷衡量钩子测试，以及留出集 |
