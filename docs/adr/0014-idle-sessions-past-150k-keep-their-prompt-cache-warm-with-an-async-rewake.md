@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. In effect since 4 October 2026. Supersedes [ADR 0013](0013-sessions-past-150k-keep-their-prompt-cache-warm.md), whose context, 150,000-token threshold and 8-hour limit stand; the mechanism that fires the keepalive changes. Complements [ADR 0011](0011-wrap-up-finishes-in-session-at-any-watermark.md) as ADR 0013 did.
+Accepted. In effect since 4 October 2026. Supersedes [ADR 0013](0013-sessions-past-150k-keep-their-prompt-cache-warm.md), whose context, 150,000-token threshold and 8-hour limit stand; the mechanism that fires the keepalive changes. Complements [ADR 0011](0011-wrap-up-finishes-in-session-at-any-watermark.md) as ADR 0013 did. Its `stop_hook_active` condition is superseded by [ADR 0015](0015-keepalive-keeps-timing-after-its-own-wake-up-and-skips-headless-sessions.md), under which the hook does nothing in a `-p` headless session instead, and its list of the user's own messages is extended there to answers to choice questions.
 
 ## Context
 

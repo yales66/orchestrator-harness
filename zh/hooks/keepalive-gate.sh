@@ -10,13 +10,15 @@
 # 不用定时任务：定时任务按钟点触发，用户在场时也照样空跑；auto 模式分类器还会把设定时任务当作
 # 持久化操作拒掉。
 # 只在上下文 ≥ 150k 时计时：小上下文过期了重写也便宜，不值得空跑。
-# 从用户本人最后一条消息起超过 8 小时就不再唤醒，防止被遗忘的会话一直在续缓存。
+# 从用户本人最后一条消息起超过 8 小时就不再唤醒，防止被遗忘的会话一直在续缓存。用户回答选择题
+# （AskUserQuestion）也算本人消息：它进 transcript 时是工具结果，但人就在场；无人回答、超时自动提交的
+# 那条（toolUseResult 带 afkTimeoutMs）不算。
 # 订阅额度用尽、改走用量计费后，Claude Code 把主对话的缓存降为 5 分钟 TTL
 # （https://code.claude.com/docs/en/prompt-caching）：50 分钟一次的唤醒续不上缓存，还花付费额度，
 # 所以这时不计时。
 #
 # 按顺序取第一条成立的：
-#   1. stop_hook_active 为真或在子智能体内：退出 0。
+#   1. -p 无头会话（CLAUDE_CODE_ENTRYPOINT 为 sdk-cli）或在子智能体内：退出 0。
 #   2. 主线程上下文 < 150k、缓存为 5 分钟 TTL、或用户本人最后一条消息距今超过 8 小时（没有则同）：退出 0。
 #   3. 睡 KEEPALIVE_SLEEP 秒（默认 3000，只给测试改短）；醒来时 transcript 被删、变短，
 #      或开睡前的末尾之后多了 user／assistant 行：退出 0。
@@ -28,6 +30,10 @@
 # TTL 取主线程最近一次有缓存写入的 assistant 调用的 usage.cache_creation：
 # ephemeral_5m_input_tokens > 0 且 ephemeral_1h_input_tokens == 0 为 5 分钟；
 # 字段缺失或两档都为 0 的调用跳过往前找，都找不到按 1 小时处理。
+# 不看 stop_hook_active：Claude Code 把保活唤醒的那一轮记为 stop_hook_active 为真，别的 Stop 钩子
+# 拦下后续跑的那一轮也是，看它就会在这两种回合后不再计时。本钩子在交互会话里只在后台计时、
+# 不同步拦截，没有拦截循环可防。-p 无头会话里 asyncRewake 不转后台、会同步睡满 50 分钟卡住整次
+# 运行，而无头会话跑完就退出，没有缓存可保，所以直接不计时。
 # 任何异常一律退出 0，不唤醒。
 python3 -c '
 import json, os, re, sys, time
@@ -44,7 +50,7 @@ try:
     p = json.loads(sys.stdin.buffer.read().decode("utf-8"))
 except Exception:
     sys.exit(0)
-if not isinstance(p, dict) or p.get("stop_hook_active"):
+if not isinstance(p, dict) or os.environ.get("CLAUDE_CODE_ENTRYPOINT") == "sdk-cli":
     sys.exit(0)
 if str(p.get("agent_id") or "").strip():
     sys.exit(0)
@@ -95,6 +101,11 @@ with open(tp, encoding="utf-8") as f:
                     if w5 or w1:
                         short_ttl = w5 > 0 and w1 == 0
         elif m.get("role") == "user":
+            tr = o.get("toolUseResult")
+            if isinstance(tr, dict) and tr.get("questions"):
+                if not tr.get("afkTimeoutMs"):    # 用户本人回答了选择题；带 afkTimeoutMs 的是无人回答超时自动提交
+                    last_user_at = epoch(o.get("timestamp"))
+                continue
             txt = text_of(m.get("content"))
             if txt is None or o.get("isMeta"):
                 continue
