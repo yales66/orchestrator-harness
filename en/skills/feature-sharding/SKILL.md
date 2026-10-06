@@ -123,7 +123,7 @@ Orchestration capacity limit (constants in calibration.md): this session directl
 
 **Wave mode** (routed from phase 0, or every track landed in an S bin in phase 2 with no human-ruling track): no session pack. Write the file ownership table + wave split into `docs/changes/<change-id>/sharding/PLAN.md`, then dispatch per the table above, telling the user the PLAN.md path when dispatching; when done, run "calibration backfill" too.
 
-### 3b. Wave 0 always contains three pieces (done and merged by one person, blocking every parallel track)
+### 3b. Wave 0 always contains three pieces (done and merged before any parallel track starts: in wave mode a wave of implementation subagents dispatched on its own, in shard mode one independent session; the contract's design stays with the main thread per 3a, and wave 0 implements the frozen design)
 
 1. **Contract freeze**: source of truth + each mirror + **mechanical alignment tests** (tests that parse each mirror and compare it field by field against the source of truth; the freeze discipline is enforced by them, not by prose)
 2. **Walking skeleton**: a minimal hello-world-level end-to-end vertical slice that surfaces integration risk before parallel work starts
@@ -175,7 +175,7 @@ downstream interface facts (signatures only) / deviations and leftovers ("none" 
 
 ### 3e. Launch checklist (for the user; this skill's final product)
 
-One line per independent-session track: budget bin and overflow trigger, where to launch (run `claude` in the main checkout directory), and the opening line (`Use EnterWorktree to open this track's worktree, run git merge --ff-only <baseline branch> in it (if git refuses, the new worktree holds no work yet, so run git reset --hard <baseline branch> instead), then read docs/changes/<change-id>/sharding/HANDOFF-<track>.md, follow it, and stop once the delivery gate passes`). Each track session creates its own worktree with the native EnterWorktree tool; the packer does not pre-create them and does not run `git worktree add` by hand. In shard mode, handing over the launch checklist finishes the job; the user launches each track.
+One line per independent-session track: budget bin and overflow trigger, where to launch (run `claude` in the main checkout directory), and the opening line (`Use EnterWorktree to open this track's worktree, run git merge --ff-only <baseline branch> in it (if git refuses, the new worktree holds no work yet, so run git reset --hard <baseline branch> instead), then read docs/changes/<change-id>/sharding/HANDOFF-<track>.md, follow it, and stop once the delivery gate passes`). Each track session creates its own worktree with the native EnterWorktree tool; the packer does not pre-create them and does not run `git worktree add` by hand. List wave 0's session first and state that the other tracks launch only after it merges; that session's last step writes its pitfalls into the downstream notes of every HANDOFF-*.md and commits them to the baseline branch. In shard mode, handing over the launch checklist finishes the job; the user launches each track.
 
 ## Calibration backfill (after each sharded feature is finished)
 

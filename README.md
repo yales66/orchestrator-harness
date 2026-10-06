@@ -163,7 +163,7 @@ bash scripts/ci-local.sh
 | [ADR 0004: The context watermark is read from transcript usage and gates the stop on a handoff](docs/adr/0004-context-watermark-read-from-transcript-usage.md) | How the context watermark is measured; its handoff timing is superseded by ADR 0007 and its handoff format by ADR 0010 |
 | [ADR 0005: Hooks that deny, block or inject rules ship with regression tests](docs/adr/0005-deciding-hooks-ship-with-regression-tests.md) | Which hooks carry tests |
 | [ADR 0006: Ask the user only where the answer is theirs](docs/adr/0006-ask-the-user-only-where-the-answer-is-theirs.md) | When the agent asks and when it acts |
-| [ADR 0007: Handoff timing weighs a session switch against a longer context](docs/adr/0007-handoff-timing-weighs-switch-against-long-context.md) | When a long session hands off |
+| [ADR 0007: Handoff timing weighs a session switch against a longer context](docs/adr/0007-handoff-timing-weighs-switch-against-long-context.md) | When a long session hands off; its reminder text is superseded by ADR 0018 |
 | [ADR 0008: Subagent effort is set per kind of dispatch](docs/adr/0008-subagent-effort-per-kind-of-dispatch.md) | Which effort each kind of dispatch runs at |
 | [ADR 0009: Read-only subagents write only where the brief points, and retriever leaves judgements open](docs/adr/0009-read-only-subagents-write-where-the-brief-points.md) | Where read-only subagents may create files, and who makes a judgement |
 | [ADR 0010: Handoffs are generated whole by the handoff skill, and a hook denies hand edits](docs/adr/0010-handoffs-are-generated-whole-by-the-handoff-skill.md) | How a handoff is produced and why it is never patched |
@@ -174,6 +174,7 @@ bash scripts/ci-local.sh
 | [ADR 0015: The keepalive keeps timing after its own wake-up, and headless sessions are not timed](docs/adr/0015-keepalive-keeps-timing-after-its-own-wake-up-and-skips-headless-sessions.md) | Why the keepalive ignores `stop_hook_active`, skips `-p` runs and, where `AskUserQuestion` is not denied, counts answers to choice questions as the user's |
 | [ADR 0016: feature-sharding ships with the harness](docs/adr/0016-feature-sharding-ships-with-the-harness.md) | Why the harness ships `feature-sharding`, and when the playbook routes multi-module work to it |
 | [ADR 0017: Decisions are asked in text, and AskUserQuestion is denied](docs/adr/0017-decisions-are-asked-in-text-and-askuserquestion-is-denied.md) | How a decision is put to the user, and why the choice-question tool is denied |
+| [ADR 0018: The watermark reminder does not hold back new work](docs/adr/0018-the-watermark-reminder-does-not-hold-back-new-work.md) | Why work goes ahead between the reminder line and the hard line |
 | [Evaluation: method and limits](docs/evaluation.md) | What the harness claims, what it does not, and what a controlled experiment would cost |
 | [Static context measurement](eval/static-context/README.md) | How to run the measurement and what each configuration installs |
 | [Hook mutation testing](eval/hook-mutations/README.md) | How injected defects measure the hook tests, and the held-out set |

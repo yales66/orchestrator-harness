@@ -123,7 +123,7 @@ description: |
 
 **波次模式**（阶段 0 路由来的，或阶段 2 全部轨道落 S 箱且无人裁决轨道）：不产会话包——文件归属表 + 波次划分写进 `docs/changes/<change-id>/sharding/PLAN.md`，随即按上表派发，派发时把 PLAN.md 路径告诉用户；完工后同样走「校准回填」。
 
-### 3b. 波次 0 必含三件套（单人做完并合入，阻塞全部并行轨道）
+### 3b. 波次 0 必含三件套（并行轨道开工前单独做完并合入：波次模式下单独派一波实现子智能体，分片模式下由一个独立会话做；契约设计本身按 3a 留在主线程，波次 0 只实现已定的设计）
 
 1. **契约冻结**：真源 + 各镜像 + **机械化对齐测试**（解析各镜像与真源逐字段比对的测试，冻结纪律靠它执行，不靠 prose）
 2. **walking skeleton**：一条 hello-world 级的最小端到端竖切，把联调期风险提前到并行开工之前暴露
@@ -175,7 +175,7 @@ HANDOFF-<轨道>.md 与 CHECKPOINT-<轨道>.md，从'下一步'继续。"
 
 ### 3e. 启动清单（给用户，本 skill 的最终产物）
 
-每条独立会话轨道一行：预算箱与溢出触发点、启动位置（主仓目录跑 `claude`）、开工第一句（`用 EnterWorktree 开本轨道 worktree，在其中运行 git merge --ff-only <基线分支>（被拒时新 worktree 里还没有工作，改运行 git reset --hard <基线分支>），然后读 docs/changes/<change-id>/sharding/HANDOFF-<轨道>.md，按其执行，交付闸门通过后停下`）。worktree 由各轨道会话用 EnterWorktree 原生工具自建——打包者不预建、不手动 `git worktree add`。分片模式交出启动清单即收尾，各轨道由用户拉起。
+每条独立会话轨道一行：预算箱与溢出触发点、启动位置（主仓目录跑 `claude`）、开工第一句（`用 EnterWorktree 开本轨道 worktree，在其中运行 git merge --ff-only <基线分支>（被拒时新 worktree 里还没有工作，改运行 git reset --hard <基线分支>），然后读 docs/changes/<change-id>/sharding/HANDOFF-<轨道>.md，按其执行，交付闸门通过后停下`）。worktree 由各轨道会话用 EnterWorktree 原生工具自建——打包者不预建、不手动 `git worktree add`。波次 0 的会话列在第一行，并写明其余轨道等它合入后再拉起；该会话的最后一步把实作中发现的坑写进每份 HANDOFF-*.md 的下游须知，并提交到基线分支。分片模式交出启动清单即收尾，各轨道由用户拉起。
 
 ## 校准回填（每个分片功能完工后）
 
