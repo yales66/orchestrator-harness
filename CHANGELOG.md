@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | ADR 0015 | Why the keepalive ignores `stop_hook_active` and keeps timing after its own wake-up, does nothing in a `-p` headless session, and counts answers to choice questions as the user's own messages; it supersedes the `stop_hook_active` condition of ADR 0014 |
 | `feature-sharding` skill | `skills/feature-sharding/SKILL.md` plans multi-module work that does not fit the main thread's remaining budget. Phase 0 routes by budget and by whether a user ruling is needed midway: direct work, subagent waves in the session, or shard mode with a session pack of `HANDOFF-<track>.md`, `MERGE-PLAN.md` and a launch checklist for independent sessions the user launches. Phases 1 and 2 remove work already implemented, survey seams and unknowns, and bin each module S, M or L; `calibration.md` holds the budget constants with their dates. `scripts/peak_context.py` reports a transcript's peak context for backfilling the constants and carries pytest tests |
 | ADR 0016 | Why `feature-sharding` ships with the harness and takes the multi-module work that does not fit the main thread's remaining budget |
+| ADR 0017 | Why decisions are asked in text and AskUserQuestion is denied; it supersedes the confirmation with AskUserQuestion in ADR 0006 |
 
 ### Changed
 
@@ -52,6 +53,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | `scripts/check-parity.sh` | Files under `skills/*/scripts/` must be byte-identical in the two copies, as the hooks are |
 | README | Describes the handoff skill, the three new hooks and the UserPromptSubmit path, gives the one-hour cache premise behind the 50-minute wake-up and how to adjust it, and notes that the static context figures were measured before this change |
 | Playbook §1 | Multi-module change, a new project or an intent to parallelise is planned and dispatched per §2 by the main thread only when its seams and budget are visible at a glance and it fits the remaining budget; otherwise it goes to `feature-sharding` instead of being split into phases with §3 handoffs |
+| Playbook §1 | Decisions are asked in text instead of with AskUserQuestion: the confirmation before an irreversible step is a text question that ends the turn, a fork that turns on the user's own preferences is asked only after the parts that do not depend on the answer and can be undone are done, and options are numbered so the user can reply with the number. A turn opened after the question by a background notification, a subagent report or a keepalive wake-up is not a reply, so the open items stay with the user. See [ADR 0017](docs/adr/0017-decisions-are-asked-in-text-and-askuserquestion-is-denied.md) |
+| `settings.example.json` | Lists `AskUserQuestion` under `permissions.deny`, because a turn held open by its dialog lets no wake-up through and the prompt cache expires after an hour of waiting |
 
 ### Fixed
 

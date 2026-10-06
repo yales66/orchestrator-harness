@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. In effect since 29 September 2026. Its choice of subagent for a search of session transcripts is superseded by [ADR 0008](0008-subagent-effort-per-kind-of-dispatch.md). In the row on a standing or conditional authorisation, the rule that one meant to carry across sessions goes into project memory and into the handoff file is superseded by [ADR 0010](0010-handoffs-are-generated-whole-by-the-handoff-skill.md): one valid across tasks goes into project memory, and one binding only this task's remaining work travels in the handoff. In the row on a next step at wrap-up, the classing of merging as external is superseded by [ADR 0012](0012-merging-own-pr-is-undoable-outside-production.md).
+Accepted. In effect since 29 September 2026. Its choice of subagent for a search of session transcripts is superseded by [ADR 0008](0008-subagent-effort-per-kind-of-dispatch.md). In the row on a standing or conditional authorisation, the rule that one meant to carry across sessions goes into project memory and into the handoff file is superseded by [ADR 0010](0010-handoffs-are-generated-whole-by-the-handoff-skill.md): one valid across tasks goes into project memory, and one binding only this task's remaining work travels in the handoff. In the row on a next step at wrap-up, the classing of merging as external is superseded by [ADR 0012](0012-merging-own-pr-is-undoable-outside-production.md). In the row on an action that cannot be taken back, confirming with AskUserQuestion is superseded by [ADR 0017](0017-decisions-are-asked-in-text-and-askuserquestion-is-denied.md): the confirmation is asked in text and the turn ends.
 
 ## Context
 
