@@ -115,7 +115,7 @@ description: |
 
 | 轨道特征 | 拓扑 |
 |---|---|
-| S 箱，且判断已写死（契约冻结、有范本可抄、一次交付可验） | subagent——本 session 波次派发：同波 = 无共享文件、无依赖，一条消息并行发出；有依赖 → 下一波，prompt 指向前置轨道的交付产物。dispatch prompt 按六要素写全（见编排者 playbook §2）——它是执行 subagent 的全部输入，不另行加载规划 / TDD 流程 skill |
+| S 箱，且判断已写死（契约冻结、有范本可抄、一次交付可验） | subagent——本 session 波次派发：同波 = 无共享文件、无依赖，一条消息并行发出；有依赖 → 下一波，prompt 指向前置轨道的交付产物。dispatch prompt 按六要素写全（见编排者 playbook §2），执行所需的规划都写进 prompt，subagent 不另走规划流程 |
 | M 箱；或需实测 / 需人中途裁决；或工作集连续 | **独立会话**（人拉起，发会话包） |
 | 契约设计、合并裁决、跨轨道取舍 | 主线程，永远不外包 |
 
@@ -127,13 +127,13 @@ description: |
 
 1. **契约冻结**：真源 + 各镜像 + **机械化对齐测试**（解析各镜像与真源逐字段比对的测试，冻结纪律靠它执行，不靠 prose）
 2. **walking skeleton**：一条 hello-world 级的最小端到端竖切，把联调期风险提前到并行开工之前暴露
-3. **结论下沉**：把勘察与波次 0 实作中发现的环境坑、依赖坑、范本 file:line 写成各轨道 HANDOFF 的"下游须知"——每个后续波次结束时同样回填下一波（滚动规划，不一次规划到底）
+3. **结论下沉**：把勘察与波次 0 实作中发现的环境坑、依赖坑、范本 file:line 写成各轨道 HANDOFF 的"下游须知"（波次模式写进各派发 prompt 的已知上下文）——每个后续波次结束时同样回填下一波（滚动规划，不一次规划到底）
 
 ### 3c. 会话包（每条独立会话轨道一份）
 
-会话包产物（`HANDOFF-*.md`、`MERGE-PLAN.md`）写进 `docs/changes/<change-id>/sharding/`，与 BRIEF.md 及其引用的 ADR 一起提交到基线分支——各轨道 worktree 从基线分支切出，天然带着自己的一份；CHECKPOINT / REPORT 写同目录、落在各自分支上，互不冲突。
+会话包产物（`HANDOFF-*.md`、`MERGE-PLAN.md`）写进 `docs/changes/<change-id>/sharding/`，与 BRIEF.md 及其引用的 ADR 一起提交到基线分支——各轨道会话开 worktree 后先快进到基线分支，由此带上自己的一份；CHECKPOINT / REPORT 写同目录、落在各自分支上，互不冲突。
 
-HANDOFF 只放指针与轨道特有事实：不抄变更说明（会漂移），也不抄 CLAUDE.md / playbook 管线纪律的通则（test-first、"必须过交付闸门"这条规矩本身、git 规矩）——harness 会把全局与项目规则栈自动注入每个新会话，重抄即双源。本轨道的**具体**验收命令与预期输出属轨道特有事实，仍写进「验收 + 自验」。模板（新会话只读它开工，必须自足，全部占位符打包时填实）：
+HANDOFF 只放指针与轨道特有事实：不抄变更说明（会漂移），也不抄 CLAUDE.md / playbook 管线纪律的通则（test-first、"必须过交付闸门"这条规矩本身、git 规矩）——harness 会把全局与项目规则栈自动注入每个新会话，重抄即双源。本轨道的**具体**验收命令与预期输出属轨道特有事实，仍写进「验收 + 自验」。模板（新会话只读它开工，必须自足；除溢出阀里的 worktree 路径由轨道会话自己填外，全部占位符打包时填实）：
 
 ```markdown
 # HANDOFF-<轨道>
@@ -159,7 +159,7 @@ HANDOFF 只放指针与轨道特有事实：不抄变更说明（会漂移），
 本轨道预算 <N 万 token>，触发点 <N×0.6 万 token>（打包时算成具体数填死，不留公式）。
 context 用量接近触发点时：停止铺新面，把状态落盘到本目录 CHECKPOINT-<轨道>.md
 （已完成 / 进行中 / 下一步 / 踩过的坑），然后提示用户开新会话接力，
-接力会话第一句："用 EnterWorktree 基于 <本轨道分支> 重入 worktree，读 sharding/ 下的
+接力会话第一句由本会话填好 worktree 路径后给出："用 EnterWorktree 的 path 参数进入 <本 worktree 路径>，读 sharding/ 下的
 HANDOFF-<轨道>.md 与 CHECKPOINT-<轨道>.md，从'下一步'继续。"
 
 ## 回报
@@ -175,7 +175,7 @@ HANDOFF-<轨道>.md 与 CHECKPOINT-<轨道>.md，从'下一步'继续。"
 
 ### 3e. 启动清单（给用户，本 skill 的最终产物）
 
-每条独立会话轨道一行：预算箱与溢出触发点、启动位置（主仓目录跑 `claude`）、开工第一句（`用 EnterWorktree 基于 <基线分支> 开本轨道 worktree，然后读 docs/changes/<change-id>/sharding/HANDOFF-<轨道>.md，按其执行，交付闸门通过后停下`）。worktree 由各轨道会话用 EnterWorktree 原生工具自建——打包者不预建、不手动 `git worktree add`。分片模式交出启动清单即收尾，各轨道由用户拉起。
+每条独立会话轨道一行：预算箱与溢出触发点、启动位置（主仓目录跑 `claude`）、开工第一句（`用 EnterWorktree 开本轨道 worktree，在其中运行 git merge --ff-only <基线分支>（被拒时新 worktree 里还没有工作，改运行 git reset --hard <基线分支>），然后读 docs/changes/<change-id>/sharding/HANDOFF-<轨道>.md，按其执行，交付闸门通过后停下`）。worktree 由各轨道会话用 EnterWorktree 原生工具自建——打包者不预建、不手动 `git worktree add`。分片模式交出启动清单即收尾，各轨道由用户拉起。
 
 ## 校准回填（每个分片功能完工后）
 

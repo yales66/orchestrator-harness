@@ -27,9 +27,9 @@ The index `MEMORY.md` is paid for by every session and by **every subagent** (me
 
 ## Procedure
 
-1. **Locate and back up**. The memory directory is `~/.claude/projects/<the project's absolute path with / replaced by ->/memory`. It is usually not under any version control, so deletions cannot be rolled back:
+1. **Locate and back up**. The memory directory is the directory of the `MEMORY.md` path shown where that file is loaded into your context. It is usually not under any version control, so deletions cannot be rolled back:
    ```
-   D=~/.claude/projects/<slug>        # parent directory of memory
+   D=<the memory directory's parent>        # parent directory of memory
    tar -czf "$D/memory-backup-$(date +%Y%m%d-%H%M%S).tar.gz" -C "$D" memory
    ```
    The backup archive goes next to memory as its sibling; do not put it inside memory.

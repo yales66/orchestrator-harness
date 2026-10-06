@@ -115,7 +115,7 @@ Binning recognises only the three measurements above; task count is not workload
 
 | Track characteristics | Topology |
 |---|---|
-| S bin, with judgement settled (contract frozen, a template to copy, verifiable in one delivery) | subagent, dispatched in waves in this session: one wave = no shared files, no dependencies, sent in parallel in one message; with dependencies → next wave, its prompt pointing to the predecessor track's deliverables. Write the dispatch prompt with all six elements (see orchestrator playbook §2); it is the executing subagent's entire input, and no separate planning / TDD workflow skill is loaded |
+| S bin, with judgement settled (contract frozen, a template to copy, verifiable in one delivery) | subagent, dispatched in waves in this session: one wave = no shared files, no dependencies, sent in parallel in one message; with dependencies → next wave, its prompt pointing to the predecessor track's deliverables. Write the dispatch prompt with all six elements (see orchestrator playbook §2), carrying all the planning the execution needs, so the subagent runs no separate planning workflow |
 | M bin; or needs live measurement / a human ruling midway; or continuous working set | **Independent session** (launched by the human, given a session pack) |
 | Contract design, merge rulings, cross-track trade-offs | Main thread, never outsourced |
 
@@ -127,13 +127,13 @@ Orchestration capacity limit (constants in calibration.md): this session directl
 
 1. **Contract freeze**: source of truth + each mirror + **mechanical alignment tests** (tests that parse each mirror and compare it field by field against the source of truth; the freeze discipline is enforced by them, not by prose)
 2. **Walking skeleton**: a minimal hello-world-level end-to-end vertical slice that surfaces integration risk before parallel work starts
-3. **Conclusions pushed down**: environment pitfalls, dependency pitfalls and template file:line found during the survey and wave 0's implementation are written into each track HANDOFF's "downstream notes"; the end of every later wave likewise backfills the next wave (rolling planning, not planning everything at once)
+3. **Conclusions pushed down**: environment pitfalls, dependency pitfalls and template file:line found during the survey and wave 0's implementation are written into each track HANDOFF's "downstream notes" (in wave mode, into each dispatch prompt's known context); the end of every later wave likewise backfills the next wave (rolling planning, not planning everything at once)
 
 ### 3c. Session pack (one per independent-session track)
 
-Session pack artefacts (`HANDOFF-*.md`, `MERGE-PLAN.md`) go into `docs/changes/<change-id>/sharding/` and are committed to the baseline branch together with BRIEF.md and the ADRs it references; each track's worktree is cut from the baseline branch and naturally carries its own copy. CHECKPOINT / REPORT files go in the same directory, landing on each track's own branch, so they never conflict.
+Session pack artefacts (`HANDOFF-*.md`, `MERGE-PLAN.md`) go into `docs/changes/<change-id>/sharding/` and are committed to the baseline branch together with BRIEF.md and the ADRs it references; each track session fast-forwards its new worktree to the baseline branch and so carries its own copy. CHECKPOINT / REPORT files go in the same directory, landing on each track's own branch, so they never conflict.
 
-A HANDOFF holds only pointers and track-specific facts: it copies neither the change brief (it would drift) nor the general pipeline discipline of CLAUDE.md / the playbook (test-first, the rule "must pass the delivery gate" itself, git rules), since the harness injects the global and project rule stack into every new session automatically and copying it again makes two sources. This track's **concrete** acceptance commands and expected output are track-specific facts and still go under "Acceptance + self-check". Template (the new session reads only this to start, so it must be self-contained; every placeholder is filled in when packing):
+A HANDOFF holds only pointers and track-specific facts: it copies neither the change brief (it would drift) nor the general pipeline discipline of CLAUDE.md / the playbook (test-first, the rule "must pass the delivery gate" itself, git rules), since the harness injects the global and project rule stack into every new session automatically and copying it again makes two sources. This track's **concrete** acceptance commands and expected output are track-specific facts and still go under "Acceptance + self-check". Template (the new session reads only this to start, so it must be self-contained; every placeholder is filled in when packing, except the worktree path in the overflow valve, which the track session fills in itself):
 
 ```markdown
 # HANDOFF-<track>
@@ -159,7 +159,7 @@ Read "Decisions" in docs/changes/<change-id>/BRIEF.md for shared decisions; froz
 This track's budget is <N×10k tokens>, trigger at <N×0.6×10k tokens> (computed into concrete numbers when packing, no formulas left).
 When context use nears the trigger: stop opening new ground, write the state to CHECKPOINT-<track>.md in this directory
 (done / in progress / next step / pitfalls hit), then prompt the user to open a new session to take over;
-the takeover session's first line: "Use EnterWorktree to re-enter the worktree based on <this track's branch>, read
+the takeover session's first line, with this session's worktree path filled in: "Use EnterWorktree with path <this worktree's path>, read
 HANDOFF-<track>.md and CHECKPOINT-<track>.md under sharding/, and continue from 'next step'."
 
 ## Report
@@ -175,7 +175,7 @@ downstream interface facts (signatures only) / deviations and leftovers ("none" 
 
 ### 3e. Launch checklist (for the user; this skill's final product)
 
-One line per independent-session track: budget bin and overflow trigger, where to launch (run `claude` in the main checkout directory), and the opening line (`Use EnterWorktree to open this track's worktree based on <baseline branch>, then read docs/changes/<change-id>/sharding/HANDOFF-<track>.md, follow it, and stop once the delivery gate passes`). Each track session creates its own worktree with the native EnterWorktree tool; the packer does not pre-create them and does not run `git worktree add` by hand. In shard mode, handing over the launch checklist finishes the job; the user launches each track.
+One line per independent-session track: budget bin and overflow trigger, where to launch (run `claude` in the main checkout directory), and the opening line (`Use EnterWorktree to open this track's worktree, run git merge --ff-only <baseline branch> in it (if git refuses, the new worktree holds no work yet, so run git reset --hard <baseline branch> instead), then read docs/changes/<change-id>/sharding/HANDOFF-<track>.md, follow it, and stop once the delivery gate passes`). Each track session creates its own worktree with the native EnterWorktree tool; the packer does not pre-create them and does not run `git worktree add` by hand. In shard mode, handing over the launch checklist finishes the job; the user launches each track.
 
 ## Calibration backfill (after each sharded feature is finished)
 
