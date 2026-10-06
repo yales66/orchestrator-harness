@@ -31,7 +31,7 @@ tool = p.get("tool_name")
 ti = p["tool_input"]
 
 NAME = "HANDOFF.md"
-REASON = "交接文件只由 handoff 技能生成：写 `HANDOFF.new.md` 后运行 `finalize.sh`。"
+REASON = "交接文件只由 handoff 技能生成：主线程没在走该技能就加载它从第 0 步走起，已在走就做完第 5 步审阅再用第 6 步的 `finalize.sh` 落位；子智能体不写 HANDOFF.md，要交接的内容写进派发指定的输出文件或回传。"
 MENTION = re.compile(r"(?<![\w.-])HANDOFF\.md(?![\w-]|\.\w)")
 WRAPPERS = ("sudo", "command", "exec", "nohup", "time", "env")
 SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}

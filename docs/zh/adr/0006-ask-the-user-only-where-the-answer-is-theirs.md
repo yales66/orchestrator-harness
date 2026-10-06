@@ -2,7 +2,7 @@
 
 ## 状态
 
-已采纳，自 2026 年 9 月 29 日起生效。其中翻会话记录派哪个子智能体，由 [ADR 0008](0008-subagent-effort-per-kind-of-dispatch.md) 取代。「持续或条件授权」一行里要跨会话延续的授权写进项目记忆并写进交接文件的规定，由 [ADR 0010](0010-handoffs-are-generated-whole-by-the-handoff-skill.md) 取代：跨任务长期有效的写进项目记忆，只约束本任务剩余工作的由交接文件带过去。「收尾时的下一步」一行里把合并归为对外动作的规定，由 [ADR 0012](0012-merging-own-pr-is-undoable-outside-production.md) 取代。
+已采纳，自 2026 年 9 月 29 日起生效。其中翻会话记录派哪个子智能体，由 [ADR 0008](0008-subagent-effort-per-kind-of-dispatch.md) 取代。「持续或条件授权」一行里要跨会话延续的授权写进项目记忆并写进交接文件的规定，由 [ADR 0010](0010-handoffs-are-generated-whole-by-the-handoff-skill.md) 取代：跨任务长期有效的写进项目记忆，只约束本任务剩余工作的由交接文件带过去。「收尾时的下一步」一行里把合并归为对外动作的规定，由 [ADR 0012](0012-merging-own-pr-is-undoable-outside-production.md) 取代。「收不回的动作」一行里用 AskUserQuestion 确认的规定，由 [ADR 0017](0017-decisions-are-asked-in-text-and-askuserquestion-is-denied.md) 取代：改为用文字提问确认，并结束本轮。
 
 ## 背景
 

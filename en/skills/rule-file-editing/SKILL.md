@@ -42,4 +42,4 @@ Type C, wording, formatting and typo fixes for which question ① of the three q
 
 Three questions: ① In which runtime scenarios does behaviour change (for a new file, ask instead: which sentences are load-bearing, such that without them an action would be missed) ② Check for author residue by behaviour delta: is there any sentence that cannot change any runtime reader's behaviour, especially self-referential sentences describing the file's own scope / mechanism / origin (if it cannot, cut it) ③ Does every cross-file pointer resolve in this file's load scope?
 
-When committing, the commit message must state the behaviour-delta basis for each addition and deletion: this is the only source of load-bearing notes for future editors.
+When committing, the commit message states the behaviour-delta basis for each addition and deletion, so future editors can recover the load-bearing notes with git blame.

@@ -27,9 +27,9 @@ description: 审计与清理项目记忆（MEMORY.md 索引与 memory/*.md），
 
 ## 流程
 
-1. **定位并备份**。记忆目录是 `~/.claude/projects/<项目绝对路径把 / 换成 ->/memory`。它通常不在任何版本控制里，删除不可回滚：
+1. **定位并备份**。记忆目录是上下文里载入 `MEMORY.md` 时标出的路径所在的目录。它通常不在任何版本控制里，删除不可回滚：
    ```
-   D=~/.claude/projects/<slug>        # memory 的父目录
+   D=<memory 目录的父目录>        # memory 的父目录
    tar -czf "$D/memory-backup-$(date +%Y%m%d-%H%M%S).tar.gz" -C "$D" memory
    ```
    备份包落在 memory 的兄弟位置，不要放进 memory 里。
