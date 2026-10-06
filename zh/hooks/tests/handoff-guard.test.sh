@@ -119,6 +119,34 @@ allow_cmd "$FIN /p/dir"
 allow_cmd "bash \"\$HOME/.claude/skills/handoff/scripts/finalize.sh\" /p/dir && cat /p/dir/HANDOFF.md"
 allow_cmd "python3 ~/.claude/skills/handoff/scripts/extract.py --out /p/dir"
 
+echo "── Bash：只在字符串文字或提交说明里提到它 ──"
+# 喂给 python3 的 heredoc 改的是 hooks/handoff-guard.sh，HANDOFF.md 只出现在替换用的句子里
+IFS= read -r -d '' REPRO <<'CMD'
+cd /p/repo && python3 - <<'EOF'
+def sub(p, pairs):
+    s=open(p).read()
+    for a,b in pairs:
+        assert s.count(a)==1,(p,a); s=s.replace(a,b)
+    open(p,'w').write(s)
+for c in ('en','zh'):
+    sub(f'{c}/hooks/handoff-guard.sh',[("已在走就按它第 6 步用 `finalize.sh` 落位。\"",
+      "已在走就做完第 5 步审阅再用第 6 步的 `finalize.sh` 落位；子智能体不写 HANDOFF.md，要交接的内容写进派发指定的输出文件或回传。\"")])
+print("done")
+EOF
+CMD
+check allow "python3 heredoc 改 handoff-guard.sh（句子里提到它）" "$(bash_json "$REPRO")"
+allow_cmd "python3 -c 'print(\"see HANDOFF.md for details\")'"
+allow_cmd $'git commit -F - <<\'EOF\'\nfix: subagents never write HANDOFF.md\n\nOnly the handoff skill writes HANDOFF.md.\nEOF'
+allow_cmd "git commit -m 'note: never \`rm HANDOFF.md\` by hand'"
+deny_cmd  "python3 -c 'import os; os.system(\"mv draft.md HANDOFF.md\")'"
+deny_cmd  $'python3 - <<\'EOF\'\nfrom pathlib import Path\nPath(d, "HANDOFF.md").write_text(x)\nEOF'
+deny_cmd  $'python3 - <<\'EOF\'\nopen(f"{root}/HANDOFF.md", "w").write(x)\nEOF'
+deny_cmd  $'python3 - <<\'EOF\'\n# rewrite HANDOFF.md\nEOF'
+deny_cmd  $'bash <<\'EOF\'\nmv draft.md HANDOFF.md\nEOF'
+# 双引号里的反引号会执行
+# shellcheck disable=SC2016
+deny_cmd  'git commit -m "note: `rm HANDOFF.md`"'
+
 echo "── 异常一律 fail-open ──"
 check allow "非 JSON 输入" 'not json at all'
 check allow "空输入" ''

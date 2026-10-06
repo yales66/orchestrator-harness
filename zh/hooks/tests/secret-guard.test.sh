@@ -37,6 +37,7 @@ try:
 except Exception:
     print("allow")
 ')
+  desc=${desc//$'\n'/⏎}
   if [ "$got" = "$want" ]; then
     PASS=$((PASS+1)); printf '  ✅ %-56s [%s]\n' "$desc" "$got"
   else
@@ -220,6 +221,35 @@ allow_cmd 'git status'
 allow_cmd 'git check-ignore .env'
 allow_cmd 'git add .env.example && git commit -m "add .env example"'
 allow_cmd 'git log -p -- .env.example'
+
+echo "── Bash: heredoc 正文与单引号里的文字不是命令 ──"
+# 喂给 python3 的 heredoc 正文是 Python 代码，字符串字面量里的 `env` 只是 README 文字
+IFS= read -r -d '' REPRO <<'CMD'
+cd /p/repo && python3 - <<'EOF'
+def sub(p, pairs):
+    s=open(p).read()
+    for a,b in pairs:
+        assert s.count(a)==1,(p,a); s=s.replace(a,b)
+    open(p,'w').write(s)
+sub('README.md',[
+("set `CONTEXT_WINDOW_TOKENS` to that window size in the `env` block of `~/.claude/settings.json`,",
+ "set `CONTEXT_WINDOW_TOKENS` to that window size as a prefix on the watermark gate's command, for example `CONTEXT_WINDOW_TOKENS=200000 bash $HOME/.claude/hooks/context-watermark-gate.sh`,"),
+])
+EOF
+git diff --stat; wc -l README.md zh/README.md
+CMD
+check allow "python3 heredoc 改 README（正文含 \`env\`）" "$(bash_json "$REPRO")"
+allow_cmd $'cat <<\'EOF\'\nrun $(cat .env) to see\nEOF'
+allow_cmd "git commit -m 'document the \`env\` block'"
+# 命令前缀赋值只设变量，不打印值；名字里的 TOKENS 是词元数
+# shellcheck disable=SC2016
+allow_cmd 'CONTEXT_WINDOW_TOKENS=200000 bash $HOME/.claude/hooks/context-watermark-gate.sh'
+deny_cmd  $'cat <<EOF\n$(cat .env)\nEOF'
+deny_cmd  $'bash <<\'EOF\'\ncat .env\nEOF'
+deny_cmd  $'sh <<EOF\nprintenv\nEOF'
+# 双引号里的反引号会执行
+# shellcheck disable=SC2016
+deny_cmd  'git commit -m "document the `env` block"'
 
 echo "── 输入异常必须 fail-open ──"
 check allow "非 JSON 输入" 'not json at all'
