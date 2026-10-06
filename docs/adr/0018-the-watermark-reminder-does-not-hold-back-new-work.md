@@ -10,7 +10,7 @@ Between the reminder line (35%) and the hard line (40%), the context watermark g
 
 ## Decision
 
-The reminder now says that no handoff is needed yet, that work in hand and new blocks of work go ahead as usual, and that past the hard line the playbook's §3 timing rule applies. A block that crosses the hard line is then weighed by the gate's first block like any other: wrap-up the held context can finish is finished, and a new large block of work that remains calls for a handoff.
+The reminder now says that no handoff is needed yet, that work in hand and new blocks of work go ahead as usual, even a block expected to cross the hard line, and that past the hard line the playbook's §3 timing rule applies. A block that crosses the hard line is then weighed by the gate's first block like any other: wrap-up the held context can finish is finished, and a new large block of work that remains calls for a handoff.
 
 ## Consequences
 
