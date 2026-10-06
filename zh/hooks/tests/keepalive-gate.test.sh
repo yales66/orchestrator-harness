@@ -19,6 +19,8 @@ Stop hook blocking error from command \"Stop\": $WAKE_PROMPT
 #   agentmsg:<几小时前>  子智能体回报        notify:<几小时前>  后台通知
 #   peer:<几小时前>      另一会话发来的消息  meta:<几小时前>    isMeta 的用户角色消息
 #   toolres              一条只含工具结果的用户角色消息
+#   askans:<几小时前>    用户回答选择题（AskUserQuestion 的工具结果，顶层带 toolUseResult.questions）
+#   askafk:<几小时前>    选择题无人回答、超时自动提交（toolUseResult 另带 afkTimeoutMs）
 #   asst:<token>         主线程 assistant    side:<token>       子智能体（isSidechain）assistant
 #   dup:<token>          与上一条 assistant 同 message.id 的续行
 #   w5m:<token> w1h:<token> w0:<token>  主线程 assistant，usage.cache_creation 按 5 分钟／1 小时写入，
@@ -57,6 +59,14 @@ for e in events:
     elif k == "notify": user("<task-notification><task-id>b1</task-id></task-notification>", v)
     elif k == "peer":   user("Another Claude session sent a message: hi", v)
     elif k == "meta":   user("Stop hook feedback:\n回复以提议问句收尾。", v, isMeta=True)
+    elif k == "askans":
+        n += 1
+        user([{"type": "tool_result", "tool_use_id": "toolu_q%d" % n, "content": "Your questions have been answered"}], v,
+             toolUseResult={"questions": [{"question": "选哪个？"}], "answers": {"选哪个？": "A"}})
+    elif k == "askafk":
+        n += 1
+        user([{"type": "tool_result", "tool_use_id": "toolu_q%d" % n, "content": "No response after 3000s"}], v,
+             toolUseResult={"questions": [{"question": "选哪个？"}], "answers": {}, "afkTimeoutMs": 3000000})
     elif k == "toolres":
         n += 1; user([{"type": "tool_result", "tool_use_id": "toolu_x%d" % n, "content": "[]"}])
     elif k in ("asst", "side"):
@@ -81,12 +91,12 @@ payload() { printf '{"hook_event_name":"Stop","transcript_path":"%s"%s}' "$1" "$
 
 # verdict <输入JSON> [钩子睡眠期间对 $T 做的动作] —— 归成 allow|wake|其他。
 # allow ＝退出 0 且无任何输出；wake ＝退出 2、stdout 为空、stderr 恰为唤醒提示。
-# 钩子睡 1 秒（KEEPALIVE_SLEEP=1），动作在钩子起跑 0.5 秒后执行。
+# 钩子睡 1 秒（KEEPALIVE_SLEEP=1），动作在钩子起跑 0.5 秒后执行。入口取 $EP，缺省为交互终端的 cli。
 verdict() {
   local p="$1" act="$2" rc
   if [ ! -f "$HOOK" ]; then echo "脚本不存在"; return; fi
   if [ -n "$act" ]; then (sleep 0.5; eval "$act") & fi
-  printf '%s' "$p" | KEEPALIVE_SLEEP=1 bash "$HOOK" >"$TMP/out" 2>"$TMP/err"
+  printf '%s' "$p" | CLAUDE_CODE_ENTRYPOINT="${EP:-cli}" KEEPALIVE_SLEEP=1 bash "$HOOK" >"$TMP/out" 2>"$TMP/err"
   rc=$?
   wait
   WAKE_PROMPT="$WAKE_PROMPT" python3 - "$rc" "$TMP/out" "$TMP/err" <<'PY'
@@ -113,7 +123,7 @@ while IFS='|' read -r want desc extra events; do
   t=$(mk "case$((PASS+FAIL)).jsonl" $events)
   report "$want" "$(verdict "$(payload "$t" "$extra")")" "$desc"
 done <<'TABLE'
-allow|stop_hook_active 为真不唤醒|"stop_hook_active":true|user:0 asst:200000
+wake|stop_hook_active 为真照常计时（保活唤醒的那一轮结束时就是这样）|"stop_hook_active":true|user:0 asst:200000
 allow|子智能体内不唤醒|"agent_id":"a_01"|user:0 asst:200000
 allow|上下文 149,999 不唤醒||user:0 asst:149999
 wake|上下文 150,000 且期间无活动唤醒||user:0 asst:150000
@@ -128,6 +138,9 @@ allow|另一会话发来的消息不算用户本人消息||user:9 asst:150000 pe
 allow|isMeta 消息不算用户本人消息||user:9 asst:150000 meta:0 asst:160000
 allow|只含工具结果的消息不算用户本人消息||user:9 asst:150000 toolres asst:160000
 allow|transcript 里没有用户本人消息不唤醒||rewake:0 asst:150000
+wake|用户刚回答选择题算本人在场||user:9 asst:150000 askans:0 asst:160000
+allow|选择题回答在 9 小时前不唤醒||user:10 asst:150000 askans:9 asst:160000
+allow|选择题超时自动提交不算本人在场||user:9 asst:150000 askafk:0 asst:160000
 allow|子智能体的大 usage 不算主线程上下文||user:0 asst:100000 side:400000
 wake|同一 message.id 的续行取主线程最后一次||user:0 asst:100000 dup:150000
 allow|5 分钟 TTL 不唤醒||user:0 w5m:200000
@@ -151,6 +164,11 @@ wake|期间只多了系统行与排队记录仍唤醒|printf '%s\n' '{"type":"sy
 allow|期间 transcript 被删不唤醒|rm -f "$T"
 allow|期间 transcript 变短不唤醒|: >"$T"
 TABLE
+
+echo "── 会话入口 ──"
+t=$(mk "ep.jsonl" user:0 asst:200000)
+report allow "$(EP=sdk-cli verdict "$(payload "$t")")" "-p 无头会话（sdk-cli）不计时"
+report wake "$(EP=claude-desktop verdict "$(payload "$t")")" "其他入口照常计时"
 
 echo "── 异常一律不唤醒 ──"
 report allow "$(verdict '{"hook_event_name":"Stop","transcript_path":"/nope/x.jsonl"}')" "transcript 路径不存在"

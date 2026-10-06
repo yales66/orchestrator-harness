@@ -2,7 +2,7 @@
 
 ## 状态
 
-已采纳，自 2026 年 10 月 4 日起生效。取代 [ADR 0013](0013-sessions-past-150k-keep-their-prompt-cache-warm.md)；ADR 0013 的背景、150,000 词元的阈值与 8 小时上限不变，变的是触发保活的机制。与 [ADR 0011](0011-wrap-up-finishes-in-session-at-any-watermark.md) 的互补关系同 ADR 0013。
+已采纳，自 2026 年 10 月 4 日起生效。取代 [ADR 0013](0013-sessions-past-150k-keep-their-prompt-cache-warm.md)；ADR 0013 的背景、150,000 词元的阈值与 8 小时上限不变，变的是触发保活的机制。与 [ADR 0011](0011-wrap-up-finishes-in-session-at-any-watermark.md) 的互补关系同 ADR 0013。其中 `stop_hook_active` 那一条件由 [ADR 0015](0015-keepalive-keeps-timing-after-its-own-wake-up-and-skips-headless-sessions.md) 取代，改为在 `-p` 无头会话里什么也不做；它对用户本人消息的界定也在 ADR 0015 中扩充到选择题的作答。
 
 ## 背景
 
