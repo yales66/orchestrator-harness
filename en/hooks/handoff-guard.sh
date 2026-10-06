@@ -14,7 +14,10 @@
 #   的参数同样逐段判断（最多嵌套 3 层）。拒绝：
 #   > >> 重定向写到它；tee 写到它；sed -i、perl -i、awk -i inplace 改它；ed/ex 打开它；
 #   truncate 它；cp/mv/rm/ln 以它为源或目标；git checkout/restore/rm/mv 指到它；
-#   python/node/ruby/perl 的内联代码（-c/-e、<<<、heredoc 正文）里出现它。
+#   python/node/ruby/perl 的内联代码（-c/-e、<<<、heredoc 正文）在字符串之外提到它、
+#   有不含空白的字符串以它为文件名，或有含空白的字符串当命令判会命中上面任一条。
+#   代码里只在一句话里提到它（替换用的文字、打印的提示）不算；单引号里的反引号与 $(...)
+#   不执行，同样不算。
 #   其余命令只是读它或提到它（cat/head/grep/sed -n/wc/diff/git diff|log|show），放行；
 #   bash …/skills/handoff/scripts/finalize.sh <dir> 不命中上面任何一条，同样放行。
 # 任何异常一律放行，hook 不该卡死会话。
@@ -155,6 +158,46 @@ def inline_command(name, args):
             return a if c_seen else None
     return None
 
+LITERAL = re.compile(r"\"\"\"(?:\\.|[^\\])*?\"\"\"|\x27\x27\x27(?:\\.|[^\\])*?\x27\x27\x27"
+                     r"|\"(?:\\.|[^\"\\\n])*\"|\x27(?:\\.|[^\x27\\\n])*\x27|`(?:\\.|[^`\\])*`", re.S)
+
+def code_writes(code, depth):
+    # 解释器代码里提到它：字符串之外（变量名、注释）一律算；字符串是不含空白的路径就算；
+    # 含空白的字符串可能交给 os.system 或 shell=True，当命令再查一遍，只是一句话就不算
+    if not MENTION.search(code):
+        return False
+    if MENTION.search(LITERAL.sub(" ", code)):
+        return True
+    for m in LITERAL.finditer(code):
+        s = m.group(0)
+        body = s[3:-3] if len(s) >= 6 and s[:3] in ("\"\"\"", "\x27\x27\x27") else s[1:-1]
+        if not MENTION.search(body):
+            continue
+        if not re.search(r"\s", body):
+            return True
+        if depth < MAX_DEPTH and scan(body, depth + 1):
+            return True
+    return False
+
+def outside_single_quotes(s):
+    # 单引号里的 $(...) 与反引号只是文字，换成空格；双引号里的照样执行，保留
+    out, q, i = [], None, 0
+    while i < len(s):
+        c = s[i]
+        if c == "\\" and q != "\x27" and i + 1 < len(s):
+            out.append(s[i:i + 2]); i += 2; continue
+        if q == "\x27":
+            q = None if c == "\x27" else q
+            out.append(" ")
+        else:
+            if c == "\"":
+                q = None if q else c
+            elif c == "\x27" and not q:
+                q = c
+            out.append(c)
+        i += 1
+    return "".join(out)
+
 def short_has(args, letter):
     return any(a.startswith("-") and not a.startswith("--") and letter in a[1:] for a in args)
 
@@ -188,7 +231,7 @@ def seg_writes(seg, depth):
         code = inline_command(name, rest)
         return code is not None and depth < MAX_DEPTH and scan(code, depth + 1)
     lang = interpreter(name)
-    if lang and MENTION.search(inline_code(lang, rest)):
+    if lang and code_writes(inline_code(lang, rest), depth):
         return True
     if name in ("tee", "ed", "ex", "truncate", "cp", "mv", "rm", "ln"):
         return hit
@@ -217,7 +260,7 @@ def scan(cmd, depth):
             while t and os.path.basename(t[0]) in WRAPPERS:
                 t = t[1:]
             name = os.path.basename(t[0]) if t else ""
-            if interpreter(name) and MENTION.search(m.group(3)):
+            if interpreter(name) and code_writes(m.group(3), depth):
                 return True
             if name in SHELLS and depth < MAX_DEPTH and scan(m.group(3), depth + 1):
                 return True
@@ -226,7 +269,8 @@ def scan(cmd, depth):
     kept.append(cmd[last:])
     cmd = "".join(kept)
     # 双引号里的 $(...) 与反引号不会被 split_cmd 拆开，单独取出来再查一遍
-    inner = re.findall(r"\$\(([^()]*)\)", cmd) + re.findall(r"`([^`]*)`", cmd)
+    masked = outside_single_quotes(cmd)
+    inner = re.findall(r"\$\(([^()]*)\)", masked) + re.findall(r"`([^`]*)`", masked)
     segs = split_cmd(cmd) + [x for body in inner for x in split_cmd(body)]
     return any(seg.strip() and seg_writes(seg, depth) for seg in segs)
 

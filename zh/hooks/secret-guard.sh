@@ -11,6 +11,8 @@
 # Bash：按 && || ; | 与换行拆成子命令逐段判断，命令替换 $(...) 与反引号也拆开，
 #   这样 git check-ignore .env 这类只提到文件名的命令不会因为别的片段被误伤。
 #   bash/sh/zsh -c 的命令串与 eval 的参数当作命令同样逐段判断，最多嵌套 3 层。
+#   heredoc 正文与单引号里的文字是数据，不当命令判：喂给 bash/sh/zsh 的正文照命令判；
+#   定界符不带引号时正文里的 $(...) 与反引号会执行，照命令判；其余正文不看。
 #   逐段只看命令名与它的参数：
 #   打印文件内容类（cat/less/more/head/tail/bat/nl/awk/tac、非就地的 sed，以及
 #   diff/sdiff/comm/sort/uniq/cut/rev/strings/xxd/od/hexdump/base64/paste/fold/column）
@@ -330,7 +332,50 @@ def next_cwd(seg, op, where):
         return os.path.normpath(d)
     return None if where is None else os.path.normpath(os.path.join(where, d))
 
+HEREDOC = re.compile(r"(?<![<\w])<<-?[ \t]*([\x27\"]?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n(.*?)"
+                     r"(?:\n[ \t]*\2[ \t]*(?=\n|$)|\Z)", re.S)
+SUBST = (re.compile(r"\$\(([^()]*)\)"), re.compile(r"`([^`]*)`"))
+
+def outside_single_quotes(s):
+    # 单引号里的 $(...) 与反引号只是文字，换成空格；双引号里的照样执行，保留
+    out, q, i = [], None, 0
+    while i < len(s):
+        c = s[i]
+        if c == "\\" and q != "\x27" and i + 1 < len(s):
+            out.append(s[i:i + 2]); i += 2; continue
+        if q == "\x27":
+            q = None if c == "\x27" else q
+            out.append(" ")
+        else:
+            if c == "\"":
+                q = None if q else c
+            elif c == "\x27" and not q:
+                q = c
+            out.append(c)
+        i += 1
+    return "".join(out)
+
+def consumer(line):
+    # heredoc 所在行最后一段的命令名，即读这段正文的命令
+    t = tokens(split_cmd(line)[-1])
+    while t and (t[0] in PREFIXES or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", t[0])):
+        t = t[1:]
+    return os.path.basename(t[0]) if t else ""
+
 def scan(cmd, depth, where):
+    # heredoc 正文是喂给命令的数据，不当命令判：读它的是 shell 时正文就是脚本，照命令查；
+    # 定界符不带引号时正文里的 $(...) 与反引号会先执行，单独取出来查；其余正文不看
+    kept, last, inner = [], 0, []
+    for m in HEREDOC.finditer(cmd):
+        name = consumer(cmd[cmd.rfind("\n", 0, m.start()) + 1:m.start()])
+        if name in SHELLS and depth < MAX_DEPTH and scan(m.group(3), depth + 1, where):
+            return True
+        if not m.group(1):
+            inner += [x for r in SUBST for x in r.findall(m.group(3))]
+        kept.append(cmd[last:m.start(3)])
+        last = m.end()
+    kept.append(cmd[last:])
+    cmd = "".join(kept)
     ops, start = [], where
     segs = split_cmd(cmd, ops)
     stack, in_bt = [], False
@@ -344,7 +389,7 @@ def scan(cmd, depth, where):
             where = stack.pop()
         in_bt = in_bt != (op == "`")
     # 双引号里的命令替换 "$(cat .env)" 同样会执行，把替换体单独拿出来再判一遍
-    inner = re.findall(r"\$\(([^()]*)\)", cmd) + re.findall(r"`([^`]*)`", cmd)
+    inner += [x for r in SUBST for x in r.findall(outside_single_quotes(cmd))]
     return any(x.strip() and prints_secret(x, depth, start)
                for body in inner for x in split_cmd(body))
 
