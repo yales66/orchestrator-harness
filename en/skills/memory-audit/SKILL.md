@@ -19,7 +19,7 @@ Five cases that condemn a memory; check each one in turn:
 
 For entries that are kept but verbose (over about 3000 characters), give a separate compression target: cut process narrative, comparison figures from closed cases, and rulings already recorded in an ADR (architecture decision record); keep pitfalls and constraints.
 
-The `description` field is for judging relevance, not a summary of the content; the body must not explain why the memory exists.
+The `description` field is for judging relevance, not a summary of the content; the body may give the rule's reason but not which session the memory came from.
 
 ## Two layers of size, counted separately
 

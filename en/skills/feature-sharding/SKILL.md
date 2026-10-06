@@ -123,7 +123,7 @@ Orchestration capacity limit (constants in calibration.md): this session directl
 
 **Wave mode** (routed from phase 0, or every track landed in an S bin in phase 2 with no human-ruling track): no session pack. Write the file ownership table + wave split into `docs/changes/<change-id>/sharding/PLAN.md`, then dispatch per the table above, telling the user the PLAN.md path when dispatching; when done, run "calibration backfill" too.
 
-### 3b. Wave 0 always contains three pieces (done and merged by one person, blocking every parallel track)
+### 3b. Wave 0 always contains three pieces (done and merged as a single track before any parallel track starts: in wave mode a subagent wave of its own, in shard mode one independent session)
 
 1. **Contract freeze**: source of truth + each mirror + **mechanical alignment tests** (tests that parse each mirror and compare it field by field against the source of truth; the freeze discipline is enforced by them, not by prose)
 2. **Walking skeleton**: a minimal hello-world-level end-to-end vertical slice that surfaces integration risk before parallel work starts

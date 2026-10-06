@@ -2,7 +2,7 @@
 
 ## 状态
 
-已采纳，自 2026 年 9 月 30 日起生效。取代 ADR 0004 中的交接时机；ADR 0004 从会话记录用量读取水位的做法不变。由 [ADR 0011](0011-wrap-up-finishes-in-session-at-any-watermark.md) 扩展：本 ADR 只在过硬线后才在当前会话做完的收尾，现在不论水位都在当前会话做完；新的大块工作之前的权衡仍然有效。
+已采纳，自 2026 年 9 月 30 日起生效。取代 ADR 0004 中的交接时机；ADR 0004 从会话记录用量读取水位的做法不变。由 [ADR 0011](0011-wrap-up-finishes-in-session-at-any-watermark.md) 扩展：本 ADR 只在过硬线后才在当前会话做完的收尾，现在不论水位都在当前会话做完；新的大块工作之前的权衡仍然有效。表中 35% 到 40% 那一行的提醒内容已被 [ADR 0018](0018-the-watermark-reminder-does-not-hold-back-new-work.md) 取代。
 
 ## 背景
 

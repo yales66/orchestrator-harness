@@ -89,8 +89,8 @@ if pct < HARD:
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "Stop",
         "additionalContext": (
-            "主线程 context 已过提醒线。不必现在写交接;不开预计会越过硬线的新工作块,"
-            "过硬线后按 playbook §3 的时机规则收尾。"
+            "主线程 context 已过提醒线。不必现在写交接;手头工作与新工作块照常做,"
+            "过硬线后按 playbook §3 的时机规则处理。"
         )}}))
     sys.exit(0)
 

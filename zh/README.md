@@ -163,7 +163,7 @@ bash scripts/ci-local.sh
 | [ADR 0004：上下文水位从会话记录的用量读取，并以交接文件为停止闸门](../docs/zh/adr/0004-context-watermark-read-from-transcript-usage.md) | 上下文水位怎样测量；交接时机已被 ADR 0007 取代，交接格式已被 ADR 0010 取代 |
 | [ADR 0005：会拒绝、拦截或注入规则的钩子都带回归测试](../docs/zh/adr/0005-deciding-hooks-ship-with-regression-tests.md) | 哪些钩子要带测试 |
 | [ADR 0006：只在答案属于用户时才问用户](../docs/zh/adr/0006-ask-the-user-only-where-the-answer-is-theirs.md) | 智能体何时提问、何时直接做 |
-| [ADR 0007：交接时机在换会话与长上下文两头的代价之间权衡](../docs/zh/adr/0007-handoff-timing-weighs-switch-against-long-context.md) | 长会话何时交接 |
+| [ADR 0007：交接时机在换会话与长上下文两头的代价之间权衡](../docs/zh/adr/0007-handoff-timing-weighs-switch-against-long-context.md) | 长会话何时交接；提醒内容已被 ADR 0018 取代 |
 | [ADR 0008：子智能体的推理强度按派发种类设定](../docs/zh/adr/0008-subagent-effort-per-kind-of-dispatch.md) | 每类派发跑在什么推理强度 |
 | [ADR 0009：只读子智能体只在派发说明指定处写文件，retriever 把判断留给主线程](../docs/zh/adr/0009-read-only-subagents-write-where-the-brief-points.md) | 只读子智能体能在哪里建文件，判断由谁来下 |
 | [ADR 0010：交接文件由 handoff 技能整份生成，钩子禁止手改](../docs/zh/adr/0010-handoffs-are-generated-whole-by-the-handoff-skill.md) | 交接文件怎样生成，为什么从不打补丁 |
@@ -174,6 +174,7 @@ bash scripts/ci-local.sh
 | [ADR 0015：保活在自己的唤醒之后照常计时，-p 无头会话不计时](../docs/zh/adr/0015-keepalive-keeps-timing-after-its-own-wake-up-and-skips-headless-sessions.md) | 保活为什么不看 `stop_hook_active`、不在 `-p` 运行里计时，并在没有拒用 `AskUserQuestion` 的安装里把选择题的作答算作用户本人的消息 |
 | [ADR 0016：feature-sharding 随仓库发布](../docs/zh/adr/0016-feature-sharding-ships-with-the-harness.md) | 为什么随框架发布 `feature-sharding`，编排手册何时把多模块工作交给它 |
 | [ADR 0017：拍板改为文字提问，AskUserQuestion 被拒用](../docs/zh/adr/0017-decisions-are-asked-in-text-and-askuserquestion-is-denied.md) | 怎样请用户拍板，以及为什么拒用选择题工具 |
+| [ADR 0018：水位提醒不再拦着新工作](../docs/zh/adr/0018-the-watermark-reminder-does-not-hold-back-new-work.md) | 提醒线与硬线之间为什么照常开工 |
 | [评测：方法与局限](../docs/zh/evaluation.md) | 本框架主张什么、不主张什么，以及受控实验要花多少 |
 | [静态上下文测量](../eval/static-context/README.md) | 怎样运行这项测量，每组配置安装了什么 |
 | [钩子变异测试](../eval/hook-mutations/README.md) | 怎样用植入的缺陷衡量钩子测试，以及留出集 |
