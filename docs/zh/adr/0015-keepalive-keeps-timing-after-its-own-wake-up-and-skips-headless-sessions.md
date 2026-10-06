@@ -37,5 +37,7 @@ Claude Code 2.1.291 在 `asyncRewake` 唤醒起的那一轮结束时，以及在
 | 出处 | 支撑的内容 |
 |---|---|
 | `zh/hooks/keepalive-gate.sh` 与 `zh/hooks/tests/keepalive-gate.test.sh` | 入口为 `sdk-cli` 时退出、不再因 `stop_hook_active` 退出、选择题作答算用户本人消息与 `afkTimeoutMs` 的排除，以及检查这些行为的用例 |
-| `zh/hooks/keepalive-gate.sh` 的头部注释 | Claude Code 把保活自己那一轮与被别的 Stop 钩子拦下后续跑的那一轮都标为 `stop_hook_active`，以及 `-p` 会话里 `asyncRewake` 同步运行 |
+| Claude Code 2.1.291 的打包源码，可按这些片段检索：`priority:"next",stopHookActive:!0,turnAttribution:"inherit"`（`asyncRewake` 退出码 2 入队时带上该标志）、`malformedToolUseRetried:!1,stopHookActive:!0`（同步 Stop 钩子拦下后续跑的那一轮）、`hook_event_name:"Stop",stop_hook_active:`（标志写进 Stop 输入）、`e.asyncRewake&&io`（打印模式下 `io` 为假，`-p` 会话同步运行钩子），以及超时提交时选择题结果里的 `afkTimeoutMs` | Claude Code 把保活自己那一轮与被别的 Stop 钩子拦下后续跑的那一轮都标为 `stop_hook_active`，`-p` 会话里 `asyncRewake` 同步运行，以及区分超时提交的字段 |
+| 2026 年 10 月 6 日的一次真实交互会话实测，门槛改为 0、睡眠缩短到 100 秒 | 第一次唤醒后的那次结束回合带着 `stop_hook_active` 为真，改后的钩子照常计时并按时第二次唤醒 |
+| 2026 年 10 月 6 日的一次 `-p` 运行，其 Stop 钩子打印了 `CLAUDE_CODE_ENTRYPOINT` | `-p` 会话里入口为 `sdk-cli`，交互会话里为 `cli` |
 | [ADR 0014](0014-idle-sessions-past-150k-keep-their-prompt-cache-warm-with-an-async-rewake.md) | 本 ADR 沿用的条件、50 分钟睡眠与 8 小时上限 |
