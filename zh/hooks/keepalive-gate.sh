@@ -7,6 +7,16 @@
 # 一直没有活动才以退出码 2 唤醒模型，提示只要一个句点，把缓存续上。所以它只在用户离开时触发。
 # 50 分钟让唤醒落在 1 小时有效期内，并给唤醒本身的排队与请求留出余量。
 # 保活回合结束时又会触发本钩子，于是空闲期间每 50 分钟续一次。
+# 唤醒前先探测 API 连得上才唤醒：唤醒请求一旦因断网失败，回合结束触发的是 StopFailure 而不是 Stop，
+# StopFailure 的退出码被忽略、唤醒不了模型（https://code.claude.com/docs/en/hooks.md ），保活链就此断掉。
+# 连不上时每 30 秒再探，直到钩子起跑后 57 分钟（缓存 1 小时有效期留 3 分钟余量）为止；过了这个截止
+# 缓存已过期或来不及续，再唤醒就要按写入价重写整段上下文，比不保活还贵，所以放弃。探测连得上、
+# 紧接着的唤醒请求却失败的情况补不上。
+# 计时按墙钟比对：time.sleep 在 Mac 睡眠期间不走，合盖醒来可能已过截止，这时同样放弃。
+# 下一次唤醒会超过 8 小时上限时，这一次唤醒改为最后一次：还有要交给新会话接着做的事就用 handoff 技能
+# 写交接，趁缓存还热，读上下文只按缓存读价计费；任务已做完、只剩用户本人要做的事，或已有交接或计划
+# 已写全剩余工作，交接只是重复，就只回句点。是否还有事要交接只有模型看得出，所以由提示交给它判断。
+# 发过最后一次唤醒之后不再计时，直到用户本人再发消息。
 # 不用定时任务：定时任务按钟点触发，用户在场时也照样空跑；auto 模式分类器还会把设定时任务当作
 # 持久化操作拒掉。
 # 只在上下文 ≥ 150k 时计时：小上下文过期了重写也便宜，不值得空跑。
@@ -20,9 +30,15 @@
 # 按顺序取第一条成立的：
 #   1. -p 无头会话（CLAUDE_CODE_ENTRYPOINT 为 sdk-cli）或在子智能体内：退出 0。
 #   2. 主线程上下文 < 150k、缓存为 5 分钟 TTL、或用户本人最后一条消息距今超过 8 小时（没有则同）：退出 0。
-#   3. 睡 KEEPALIVE_SLEEP 秒（默认 3000，只给测试改短）；醒来时 transcript 被删、变短，
-#      或开睡前的末尾之后多了时间戳不早于钩子起跑的 user／assistant 行：退出 0。
-#   4. 其余向 stderr 写唤醒提示，退出 2。
+#   3. 用户本人最后一条消息之后已发过最后一次唤醒：退出 0。
+#   4. 睡到起跑后 KEEPALIVE_SLEEP 秒（默认 3000）。之后循环：transcript 被删、变短，或开睡前的末尾
+#      之后多了时间戳不早于钩子起跑的 user／assistant 行，退出 0；已过起跑后 KEEPALIVE_DEADLINE 秒
+#      （默认 3420），退出 0；探测 KEEPALIVE_PROBE_URL（默认 ANTHROPIC_BASE_URL，未设则
+#      https://api.anthropic.com）得到任何 HTTP 响应（含 4xx/5xx）算连得上，跳出循环；否则睡
+#      KEEPALIVE_RETRY 秒（默认 30）再来。这几个 KEEPALIVE_ 变量只给测试改。
+#   5. 起跑时刻加两个 KEEPALIVE_SLEEP 距用户本人最后一条消息超过 8 小时（下一次唤醒会越过上限）：
+#      向 stderr 写最后一次唤醒的提示，退出 2。
+#   6. 其余向 stderr 写句点提示，退出 2。
 # 「活动」只认 user／assistant 行：Stop 之后 Claude Code 自己会往 transcript 追加 stop_hook_summary、
 # turn_duration，空闲几分钟后还会追加 away_summary，这些行不是会话里有了新的一轮。
 # 上下文取 transcript 里主线程（非 isSidechain）最后一次 assistant 调用的 usage，
@@ -45,6 +61,7 @@ import json, os, re, sys, time
 from datetime import datetime
 
 MARK = "[保活]"
+HANDOFF_MARK = "最后一次保活"   # 最后一次唤醒提示里的字样，唤醒消息进 transcript 后据此认出已发过
 THRESHOLD = 150000
 MAX_IDLE = 8 * 3600
 # 子智能体回报、另一会话的消息、后台通知（保活唤醒也包成后台通知进 transcript）都以用户角色进
@@ -84,6 +101,7 @@ def epoch(ts):
 used = 0
 short_ttl = False         # 最近一次有缓存写入的调用是 5 分钟 TTL
 last_user_at = None       # 用户本人最后一条消息的时间
+handoff_at = None         # 最近一次「最后一次唤醒」消息的时间
 with open(tp, encoding="utf-8") as f:
     for line in f:
         try:
@@ -115,32 +133,62 @@ with open(tp, encoding="utf-8") as f:
             txt = text_of(m.get("content"))
             if txt is None or o.get("isMeta"):
                 continue
+            if MARK in txt and HANDOFF_MARK in txt:
+                handoff_at = epoch(o.get("timestamp"))
             if not txt.lstrip().startswith(MARK) and not NOT_USER.match(txt):
                 last_user_at = epoch(o.get("timestamp"))
 
 if used < THRESHOLD or short_ttl or last_user_at is None or time.time() - last_user_at > MAX_IDLE:
     sys.exit(0)
-
-time.sleep(float(os.environ.get("KEEPALIVE_SLEEP") or 3000))
-
-if not os.path.isfile(tp) or os.path.getsize(tp) < start:
+if handoff_at is not None and handoff_at >= last_user_at:
     sys.exit(0)
-with open(tp, "rb") as f:
-    f.seek(start)
-    for line in f:
-        try:
-            o = json.loads(line.decode("utf-8"))
-        except Exception:
-            continue
-        if isinstance(o, dict) and o.get("type") in ("user", "assistant"):
-            ts = epoch(o.get("timestamp"))
-            if ts is None or ts >= t0:
-                sys.exit(0)
-sys.exit(2)
+
+SLEEP = float(os.environ.get("KEEPALIVE_SLEEP") or 3000)
+DEADLINE = t0 + float(os.environ.get("KEEPALIVE_DEADLINE") or 3420)
+RETRY = float(os.environ.get("KEEPALIVE_RETRY") or 30)
+URL = os.environ.get("KEEPALIVE_PROBE_URL") or os.environ.get("ANTHROPIC_BASE_URL") or "https://api.anthropic.com"
+final = t0 + 2 * SLEEP - last_user_at > MAX_IDLE
+
+# 开睡前的末尾之后会话有了新的一轮，或 transcript 被删、变短
+def active():
+    if not os.path.isfile(tp) or os.path.getsize(tp) < start:
+        return True
+    with open(tp, "rb") as f:
+        f.seek(start)
+        for line in f:
+            try:
+                o = json.loads(line.decode("utf-8"))
+            except Exception:
+                continue
+            if isinstance(o, dict) and o.get("type") in ("user", "assistant"):
+                ts = epoch(o.get("timestamp"))
+                if ts is None or ts >= t0:
+                    return True
+    return False
+
+def reachable():
+    import urllib.error, urllib.request
+    try:
+        urllib.request.urlopen(urllib.request.Request(URL, method="HEAD"), timeout=10).close()
+        return True
+    except urllib.error.HTTPError:
+        return True
+    except Exception:
+        return False
+
+while time.time() < t0 + SLEEP:
+    time.sleep(min(30, t0 + SLEEP - time.time()))
+while True:
+    if active() or time.time() > DEADLINE:
+        sys.exit(0)
+    if reachable():
+        break
+    time.sleep(RETRY)
+sys.exit(3 if final else 2)
 ' 2>/dev/null
-if [ $? -eq 2 ]; then
-  printf '%s' '[保活] 只回复一个句点，不做别的。' >&2
-  exit 2
-fi
+case $? in
+  2) printf '%s' '[保活] 只回复一个句点，不做别的。' >&2; exit 2 ;;
+  3) printf '%s' '[保活] 用户已离开近 8 小时，这是最后一次保活。本会话还有要交给新会话接着做的事，就用 handoff 技能交接，走完该技能的全部步骤就结束；只剩提交、推送、开 PR、合并等收尾，或在等用户答复、答复后还有工作，也算要交接，本回合不做这些收尾，也不重新提问。任务已做完，或剩下的只有用户本人能做、做完后不用会话接着做的事（如人工登录、人工审核），或已有的交接或计划文件已写全剩余工作且之后没有新进展，就只回一个句点。不做别的。' >&2; exit 2 ;;
+esac
 exit 0
 }
