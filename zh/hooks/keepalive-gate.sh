@@ -21,7 +21,7 @@
 #   1. -p 无头会话（CLAUDE_CODE_ENTRYPOINT 为 sdk-cli）或在子智能体内：退出 0。
 #   2. 主线程上下文 < 150k、缓存为 5 分钟 TTL、或用户本人最后一条消息距今超过 8 小时（没有则同）：退出 0。
 #   3. 睡 KEEPALIVE_SLEEP 秒（默认 3000，只给测试改短）；醒来时 transcript 被删、变短，
-#      或开睡前的末尾之后多了 user／assistant 行：退出 0。
+#      或开睡前的末尾之后多了时间戳不早于钩子起跑的 user／assistant 行：退出 0。
 #   4. 其余向 stderr 写唤醒提示，退出 2。
 # 「活动」只认 user／assistant 行：Stop 之后 Claude Code 自己会往 transcript 追加 stop_hook_summary、
 # turn_duration，空闲几分钟后还会追加 away_summary，这些行不是会话里有了新的一轮。
@@ -34,7 +34,12 @@
 # 拦下后续跑的那一轮也是，看它就会在这两种回合后不再计时。本钩子在交互会话里只在后台计时、
 # 不同步拦截，没有拦截循环可防。-p 无头会话里 asyncRewake 不转后台、会同步睡满 50 分钟卡住整次
 # 运行，而无头会话跑完就退出，没有缓存可保，所以直接不计时。
+# Claude Code 每 100 毫秒才把 transcript 写队列落盘一次，本轮最后一条 assistant 行常在钩子量完末尾之后
+# 才落盘；它的时间戳早于钩子起跑，所以只把时间戳不早于起跑的行算新活动，没有时间戳的行照算。
+# 整个脚本包在 { } 里：bash 边读边执行脚本，睡眠期间脚本被原地改写时，醒来会从旧偏移读新内容报错退出 2，
+# 被当成一次唤醒；包起来后 bash 执行前已读完整个块。
 # 任何异常一律退出 0，不唤醒。
+{
 python3 -c '
 import json, os, re, sys, time
 from datetime import datetime
@@ -57,6 +62,7 @@ if str(p.get("agent_id") or "").strip():
 tp = p.get("transcript_path") or ""
 if not tp or not os.path.isfile(tp):
     sys.exit(0)
+t0 = time.time()               # 钩子起跑时刻；时间戳早于它的行属于本轮，只是落盘晚
 start = os.path.getsize(tp)    # 开睡前的末尾；读 transcript 期间追加的行也算在睡眠期间
 
 def text_of(content):
@@ -127,7 +133,9 @@ with open(tp, "rb") as f:
         except Exception:
             continue
         if isinstance(o, dict) and o.get("type") in ("user", "assistant"):
-            sys.exit(0)
+            ts = epoch(o.get("timestamp"))
+            if ts is None or ts >= t0:
+                sys.exit(0)
 sys.exit(2)
 ' 2>/dev/null
 if [ $? -eq 2 ]; then
@@ -135,3 +143,4 @@ if [ $? -eq 2 ]; then
   exit 2
 fi
 exit 0
+}

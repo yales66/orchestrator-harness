@@ -39,7 +39,7 @@
 
 | 测量 | 结果 | 复跑 |
 |---|---|---|
-| 钩子回归测试 | 每个副本 636 个用例全部通过 | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
+| 钩子回归测试 | 每个副本 658 个用例全部通过 | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
 | 技能脚本测试 | 每个副本 38 个 pytest 用例全部通过，其中交接脚本 36 个，feature-sharding 脚本 2 个 | `python3 -m pytest -p no:cacheprovider en/skills/handoff/scripts en/skills/feature-sharding/scripts`；第三方 pytest 插件加载报错时，在命令前加 `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`；要测 `zh/` 就把路径换成 `zh/` 另跑一次，不要把两份副本的路径放进同一条 pytest 命令，因为两份副本里的测试模块同名 |
 | 钩子变异测试，[eval/hook-mutations](../eval/hook-mutations/README.md) | 往钩子里植入的 54 个缺陷，测试首轮抓住 42 个，为存活的缺陷补上边界用例后抓住 54 个；另有 35 个只照钩子头注释、不看测试写出的留出集缺陷，测试抓住 30 个，约 86%，这是测试抓缺陷能力的无偏估计；两套缺陷都只植入最早的 9 个钩子，后加的 `keepalive-gate.sh`、`handoff-guard.sh`、`production-merge-gate.sh` 与 `production-mode-hint.sh` 这 4 个钩子没有变异体 | `HM_MANIFEST=eval/hook-mutations/holdout.tsv HM_OUT=eval/hook-mutations/holdout-results.md bash eval/hook-mutations/run.sh` |
 | 静态上下文，[eval/static-context](../eval/static-context/README.md) | 编排手册经钩子注入时，每个子智能体的首次请求输入是 10,186 词元，写进 `CLAUDE.md` 时是 13,529 词元（en/ 副本，Claude Code 2.1.286，测于加入 handoff 技能之前） | `bash eval/static-context/run.sh` |
@@ -133,7 +133,7 @@
 for t in hooks/tests/*.test.sh; do bash "$t"; done
 ```
 
-每个钩子测试都会打印 `PASS=<n> FAIL=<n>`，任何一项失败都以非零状态退出。十三个测试在每个副本里共有 636 个用例。handoff 与 feature-sharding 两个技能的脚本带 pytest 测试，每个副本分别有 36 个与 2 个用例，在 `en/` 或 `zh/` 目录下这样运行：
+每个钩子测试都会打印 `PASS=<n> FAIL=<n>`，任何一项失败都以非零状态退出。十三个测试在每个副本里共有 658 个用例。handoff 与 feature-sharding 两个技能的脚本带 pytest 测试，每个副本分别有 36 个与 2 个用例，在 `en/` 或 `zh/` 目录下这样运行：
 
 ```bash
 python3 -m pytest -p no:cacheprovider skills/handoff/scripts skills/feature-sharding/scripts
@@ -147,7 +147,7 @@ python3 -m pytest -p no:cacheprovider skills/handoff/scripts skills/feature-shar
 bash scripts/check-parity.sh
 ```
 
-持续集成在每次推送与拉取请求时运行。它在 Ubuntu 与 macOS 上运行两份副本的钩子测试，每份 636 个用例，用 pytest 运行两份副本的技能脚本测试，用 shellcheck 检查钩子、钩子测试、技能的 shell 脚本与仓库脚本，并运行中英文副本的一致性检查。推送前想在本机一次跑完这四项检查，可以在仓库根目录下运行下面的命令。它需要装有 pytest 的 `python3`，以及 `jq`、`git` 与 shellcheck，都在 `PATH` 上，并且只覆盖你本机的操作系统和用来运行它的那个 bash；在 Mac 上用 `/bin/bash scripts/ci-local.sh` 运行，就和持续集成用的 bash 3.2 一致。一致性检查只看已纳入 git 跟踪的文件，新建的文件先 `git add` 再运行：
+持续集成在每次推送与拉取请求时运行。它在 Ubuntu 与 macOS 上运行两份副本的钩子测试，每份 658 个用例，用 pytest 运行两份副本的技能脚本测试，用 shellcheck 检查钩子、钩子测试、技能的 shell 脚本与仓库脚本，并运行中英文副本的一致性检查。推送前想在本机一次跑完这四项检查，可以在仓库根目录下运行下面的命令。它需要装有 pytest 的 `python3`，以及 `jq`、`git` 与 shellcheck，都在 `PATH` 上，并且只覆盖你本机的操作系统和用来运行它的那个 bash；在 Mac 上用 `/bin/bash scripts/ci-local.sh` 运行，就和持续集成用的 bash 3.2 一致。一致性检查只看已纳入 git 跟踪的文件，新建的文件先 `git add` 再运行：
 
 ```bash
 bash scripts/ci-local.sh

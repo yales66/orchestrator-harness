@@ -39,7 +39,7 @@ The same page reports the state of four experiments that make many paid model ca
 
 | Measurement | Result | Rerun |
 |---|---|---|
-| Hook regression tests | 636 cases per copy pass | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
+| Hook regression tests | 658 cases per copy pass | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
 | Skill script tests | 38 pytest cases per copy pass, 36 for the handoff scripts and 2 for the feature-sharding script | `python3 -m pytest -p no:cacheprovider en/skills/handoff/scripts en/skills/feature-sharding/scripts`; if a third-party pytest plugin fails to load, prefix the command with `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`; to test `zh/`, run it again with the `zh/` paths rather than putting both copies' paths in one pytest command, because the two copies hold test modules of the same name |
 | Hook mutation testing, [eval/hook-mutations](eval/hook-mutations/README.md) | the tests killed 42 of 54 injected defects on the first run and 54 of 54 once boundary cases were added for the survivors; on a held-out set of 35, written from the hook header comments without reading the tests, they kill 30, about 86%, which is the unbiased estimate of how well the tests catch defects; both sets inject defects only into the nine earliest hooks, so the four added later, `keepalive-gate.sh`, `handoff-guard.sh`, `production-merge-gate.sh` and `production-mode-hint.sh`, have no mutants | `HM_MANIFEST=eval/hook-mutations/holdout.tsv HM_OUT=eval/hook-mutations/holdout-results.md bash eval/hook-mutations/run.sh` |
 | Static context, [eval/static-context](eval/static-context/README.md) | each subagent's first-request input is 10,186 tokens with the playbook injected by the hook against 13,529 with it in `CLAUDE.md` (en/ copy, Claude Code 2.1.286, measured before the handoff skill was added) | `bash eval/static-context/run.sh` |
@@ -133,7 +133,7 @@ Run the hook tests from `en/` or `zh/`:
 for t in hooks/tests/*.test.sh; do bash "$t"; done
 ```
 
-Each hook test prints `PASS=<n> FAIL=<n>` and exits non-zero on any failure. The thirteen tests hold 636 cases in each copy. The scripts of the handoff and feature-sharding skills carry pytest tests, 36 and 2 cases in each copy, which run from `en/` or `zh/` with:
+Each hook test prints `PASS=<n> FAIL=<n>` and exits non-zero on any failure. The thirteen tests hold 658 cases in each copy. The scripts of the handoff and feature-sharding skills carry pytest tests, 36 and 2 cases in each copy, which run from `en/` or `zh/` with:
 
 ```bash
 python3 -m pytest -p no:cacheprovider skills/handoff/scripts skills/feature-sharding/scripts
@@ -147,7 +147,7 @@ From the repository root, the check that `en/` and `zh/` hold matching copies ru
 bash scripts/check-parity.sh
 ```
 
-CI runs on every push and pull request. It runs the hook tests of both copies, 636 cases each, on Ubuntu and macOS, runs the skill script tests of both copies with pytest, runs shellcheck over the hooks, their tests, the skill shell scripts and the repository scripts, and runs the en/zh parity check. To run the same four checks locally before pushing, run the command below from the repository root. It needs `python3` with pytest installed, and `jq`, `git` and `shellcheck`, on `PATH`, and covers only your operating system and the bash you run it with; on a Mac, `/bin/bash scripts/ci-local.sh` matches the bash 3.2 that CI uses. The parity check sees only files git tracks, so `git add` new files before running it:
+CI runs on every push and pull request. It runs the hook tests of both copies, 658 cases each, on Ubuntu and macOS, runs the skill script tests of both copies with pytest, runs shellcheck over the hooks, their tests, the skill shell scripts and the repository scripts, and runs the en/zh parity check. To run the same four checks locally before pushing, run the command below from the repository root. It needs `python3` with pytest installed, and `jq`, `git` and `shellcheck`, on `PATH`, and covers only your operating system and the bash you run it with; on a Mac, `/bin/bash scripts/ci-local.sh` matches the bash 3.2 that CI uses. The parity check sees only files git tracks, so `git add` new files before running it:
 
 ```bash
 bash scripts/ci-local.sh
