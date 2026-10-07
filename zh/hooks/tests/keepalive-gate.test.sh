@@ -163,7 +163,17 @@ allow|期间主线程有 assistant 调用不唤醒|printf '%s\n' '{"type":"assis
 wake|期间只多了系统行与排队记录仍唤醒|printf '%s\n' '{"type":"system","subtype":"away_summary"}' '{"type":"queue-operation","operation":"enqueue"}' >>"$T"
 allow|期间 transcript 被删不唤醒|rm -f "$T"
 allow|期间 transcript 变短不唤醒|: >"$T"
+wake|起跑后才落盘、时间戳早于起跑的 assistant 行仍唤醒|printf '%s\n' '{"type":"assistant","timestamp":"2020-01-01T00:00:00.000Z","message":{"role":"assistant","content":[]}}' >>"$T"
+wake|起跑后才落盘、时间戳早于起跑的 user 行仍唤醒|printf '%s\n' '{"type":"user","timestamp":"2020-01-01T00:00:00.000Z","message":{"role":"user","content":"在吗"}}' >>"$T"
+allow|时间戳晚于起跑的 assistant 行不唤醒|printf '%s\n' '{"type":"assistant","timestamp":"2099-01-01T00:00:00.000Z","message":{"role":"assistant","content":[]}}' >>"$T"
 TABLE
+
+echo "── 睡眠期间脚本被原地改写 ──"
+# bash 边读边执行脚本：睡眠期间原地改写钩子文件，醒来后不能从旧偏移读新内容报错，仍照常唤醒
+cp "$HOOK" "$TMP/kg.sh"
+t=$(mk "rewrite.jsonl" user:0 asst:200000)
+# shellcheck disable=SC2016  # 动作由 verdict 在子 shell 里 eval，变量到那时才展开
+report wake "$(HOOK="$TMP/kg.sh" T="$t" verdict "$(payload "$t")" '{ printf "#%0300d\n" 0; cat "$HOOK"; } >"$TMP/kg.new"; cat "$TMP/kg.new" >"$HOOK"')" "睡眠期间脚本被原地改写仍照常唤醒"
 
 echo "── 会话入口 ──"
 t=$(mk "ep.jsonl" user:0 asst:200000)
