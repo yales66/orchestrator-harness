@@ -1,12 +1,14 @@
-"""Effort sweep runner: the same brief, dispatched to a subagent at effort high and at effort medium.
+"""Effort sweep runner: the same brief, dispatched to a subagent at a chosen model and effort.
 
 Each (case, rep) gets a fresh isolated clone of the case's repository holding
 only the commit the brief was written against and its history (see common.py),
 checked for leftovers of later work before the model is called, and a fresh
 CLAUDE_CONFIG_DIR holding the
 zh/ harness as installed (CLAUDE.md, playbook, hooks, skills, agents) plus one
-agent definition, `effort-sweep-<effort>`, whose frontmatter pins the model and
-the effort. `claude -p` starts a main thread that makes exactly one Agent call
+agent definition, `effort-sweep-<effort>` for Opus or `effort-sweep-<model>-<effort>`
+otherwise, whose frontmatter pins the model and the effort. Each (model, effort)
+arm writes to its own directory under $DATA; the dispatching main thread runs on
+Opus for every arm. `claude -p` starts a main thread that makes exactly one Agent call
 to that agent; a PreToolUse hook swaps the placeholder prompt for the case's
 brief, so the subagent receives the brief byte for byte. The subagent's own
 transcript supplies the report, usage, model and tool calls; the main thread's
@@ -14,7 +16,9 @@ usage is kept apart as dispatch overhead.
 
   python3 eval/effort-sweep/run.py run --data "$DATA" --effort high      # -> $DATA/baseline/
   python3 eval/effort-sweep/run.py run --data "$DATA" --effort medium    # -> $DATA/v1/
+  python3 eval/effort-sweep/run.py run --data "$DATA" --model haiku --effort max   # -> $DATA/haiku-max/
   python3 eval/effort-sweep/run.py summarize --data "$DATA"
+  python3 eval/effort-sweep/run.py summarize --data "$DATA" --ref baseline --arms haiku-high,haiku-max
   python3 eval/effort-sweep/run.py run --data "$DATA" --effort high --dry-run   # no model call
 
 The first real run stops with exit 2 until the user runs it once with
@@ -47,8 +51,12 @@ from common import (TIER_LABELS, TIERS, changed_since, dirty_manifest, git, leak
                     remove_workspace, rewrite_prompt, sha256_files, wilson, WORK_ROOT)
 from grade import grade_impl, grade_text, setup_ignores  # noqa: E402
 
-MODEL = "claude-opus-5-5"
+MODEL = "claude-opus-5-5"  # the dispatching main thread, the same for every arm
+MODEL_IDS = {"opus": "claude-opus-5-5", "haiku": "claude-haiku-5-5"}
+EFFORTS = ("low", "medium", "high", "xhigh", "max")
+BANDS = ("hard", "mid", "easy")
 HARNESS = REPO_ROOT / "zh"
+# The first two arms keep the directory names their data was collected under.
 VARIANT_DIR = {"high": "baseline", "medium": "v1"}
 PLACEHOLDER = "BRIEF"
 AGENT_TOOLS = "Agent,Bash,Read,Edit,Write,Glob,Grep,NotebookEdit,TodoWrite,WebFetch,WebSearch"
@@ -78,17 +86,24 @@ _write_lock = threading.Lock()
 
 # ---------------------------------------------------------------- config dir
 
-def agent_name(effort: str) -> str:
-    return f"effort-sweep-{effort}"
+def variant_dir(model: str, effort: str) -> str:
+    """Directory name of the (model, effort) arm under the data directory."""
+    if model == "opus" and effort in VARIANT_DIR:
+        return VARIANT_DIR[effort]
+    return f"{model}-{effort}"
 
 
-def agent_definition(effort: str) -> str:
-    return (f"---\nname: {agent_name(effort)}\n"
+def agent_name(effort: str, model: str = "opus") -> str:
+    return f"effort-sweep-{effort}" if model == "opus" else f"effort-sweep-{model}-{effort}"
+
+
+def agent_definition(effort: str, model: str = "opus") -> str:
+    return (f"---\nname: {agent_name(effort, model)}\n"
             f"description: Worker for the effort sweep eval; runs one brief at effort {effort}.\n"
-            f"model: {MODEL}\neffort: {effort}\n---\n\n{AGENT_BODY}\n")
+            f"model: {MODEL_IDS[model]}\neffort: {effort}\n---\n\n{AGENT_BODY}\n")
 
 
-def build_config(cfg: Path, effort: str) -> None:
+def build_config(cfg: Path, effort: str, model: str = "opus") -> None:
     """Install zh/ the way README's install steps do, plus the sweep agent and the brief-injection hook."""
     cfg.mkdir(parents=True)
     shutil.copy(HARNESS / "CLAUDE.md", cfg / "CLAUDE.md")
@@ -96,7 +111,7 @@ def build_config(cfg: Path, effort: str) -> None:
     shutil.copytree(HARNESS / "hooks", cfg / "hooks", ignore=shutil.ignore_patterns("tests"))
     shutil.copytree(HARNESS / "skills", cfg / "skills")
     shutil.copytree(HARNESS / "agents", cfg / "agents")
-    (cfg / "agents" / f"{agent_name(effort)}.md").write_text(agent_definition(effort), encoding="utf-8")
+    (cfg / "agents" / f"{agent_name(effort, model)}.md").write_text(agent_definition(effort, model), encoding="utf-8")
     (cfg / "hooks" / "effort_sweep_inject.py").write_text(INJECT_HOOK, encoding="utf-8")
     hooks = json.loads((HARNESS / "settings.example.json").read_text(encoding="utf-8"))["hooks"]
     hooks = json.loads(json.dumps(hooks).replace("$HOME/.claude", str(cfg)))
@@ -107,25 +122,25 @@ def build_config(cfg: Path, effort: str) -> None:
     (cfg / "settings.json").write_text(json.dumps({"hooks": hooks}, indent=2), encoding="utf-8")
 
 
-def main_prompt(case: dict, effort: str, inline_brief: str | None) -> str:
+def main_prompt(case: dict, effort: str, inline_brief: str | None, model: str = "opus") -> str:
     desc = case["id"]
     if inline_brief is None:
-        return (f'Call the Agent tool exactly once, with subagent_type "{agent_name(effort)}", description "{desc}", '
+        return (f'Call the Agent tool exactly once, with subagent_type "{agent_name(effort, model)}", description "{desc}", '
                 f'run_in_background false, and prompt "{PLACEHOLDER}". Do not call any other tool, do not read any '
                 f'file and do not work on anything yourself. After the Agent tool returns, reply with exactly: DONE')
-    return (f'Call the Agent tool exactly once, with subagent_type "{agent_name(effort)}", description "{desc}", '
+    return (f'Call the Agent tool exactly once, with subagent_type "{agent_name(effort, model)}", description "{desc}", '
             f'run_in_background false, and as prompt the text between the lines <<<BRIEF and BRIEF>>> below, copied '
             f'character for character without those two lines. Do not call any other tool, do not read any file and '
             f'do not work on anything yourself. After the Agent tool returns, reply with exactly: DONE\n'
             f'<<<BRIEF\n{inline_brief}\nBRIEF>>>')
 
 
-def child_env(cfg: Path, brief_file: Path, effort: str, bodies: Path | None = None) -> dict:
+def child_env(cfg: Path, brief_file: Path, effort: str, bodies: Path | None = None, model: str = "opus") -> dict:
     env = {
         "PATH": os.environ["PATH"], "HOME": os.environ["HOME"], "USER": os.environ.get("USER", ""),
         "LOGNAME": os.environ.get("LOGNAME", ""), "SHELL": "/bin/bash", "LANG": "en_US.UTF-8", "TERM": "dumb",
         "TMPDIR": os.environ.get("TMPDIR", "/tmp"), "CLAUDE_CONFIG_DIR": str(cfg), "DISABLE_AUTOUPDATER": "1",
-        "EFFORT_SWEEP_BRIEF": str(brief_file), "EFFORT_SWEEP_AGENT": agent_name(effort),
+        "EFFORT_SWEEP_BRIEF": str(brief_file), "EFFORT_SWEEP_AGENT": agent_name(effort, model),
     }
     for key in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"):
         if os.environ.get(key):
@@ -336,17 +351,26 @@ def record_error(vdir: Path, case: dict, rep: int, cls: str, detail: str, model=
                                          "model": model, "usage": usage, "retries": 0, "ts": time.strftime("%Y-%m-%dT%H:%M:%S")})
 
 
+def served_model_problem(models: list[str], model: str) -> str | None:
+    """Why the subagent's served models do not show the arm's model, or None when they all do."""
+    expected = MODEL_IDS[model]
+    if models and all(m == expected for m in models):
+        return None
+    return f"served {sorted(set(models))}, expected {expected}"
+
+
 def original_status(repo: str) -> str:
     return hashlib.sha1(git(repo, "status", "--porcelain=v1", check=False).encode()).hexdigest()
 
 
 def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
-    effort = args.effort
-    tmp = Path(tempfile.mkdtemp(prefix=f"effort-sweep-{case['id']}-{effort}-", dir=WORK_ROOT))
+    effort, model = args.effort, getattr(args, "model", "opus")
+    arm = effort if model == "opus" else f"{model}-{effort}"
+    tmp = Path(tempfile.mkdtemp(prefix=f"effort-sweep-{case['id']}-{arm}-", dir=WORK_ROOT))
     out_dir, cfg = tmp / "out", tmp / "config"
     out_dir.mkdir()
     try:
-        ws = prepare_workspace(case, f"{effort}-r{rep}")
+        ws = prepare_workspace(case, f"{arm}-r{rep}")
     except Exception as exc:
         record_error(vdir, case, rep, "harness_error", "workspace setup: " + repr(exc))
         shutil.rmtree(tmp, ignore_errors=True)
@@ -360,21 +384,21 @@ def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
         brief = rewrite_prompt(case, ws, out_dir)
         brief_file = tmp / "brief.txt"
         brief_file.write_text(brief, encoding="utf-8")
-        build_config(cfg, effort)
+        build_config(cfg, effort, model)
         before = dirty_manifest(ws)
         orig_before = original_status(case["repo"])
-        cmd = ["claude", "-p", main_prompt(case, effort, brief if args.inline_brief else None),
+        cmd = ["claude", "-p", main_prompt(case, effort, brief if args.inline_brief else None, model),
                "--model", MODEL, "--output-format", "stream-json", "--verbose",
                "--permission-mode", "acceptEdits", "--allowedTools", AGENT_TOOLS,
                "--add-dir", str(out_dir), "--max-budget-usd", str(args.max_budget_usd)]
         if args.dry_run:
             leaked = case["repo"] in brief
-            print(f"[dry-run] {case['id']} rep{rep} effort={effort}\n  workspace {ws}\n  config {cfg}\n"
+            print(f"[dry-run] {case['id']} rep{rep} model={MODEL_IDS[model]} effort={effort}\n  workspace {ws}\n  config {cfg}\n"
                   f"  brief {brief_file} ({len(brief)} chars; original path left in brief: {leaked})\n"
-                  f"  agent file {cfg / 'agents' / (agent_name(effort) + '.md')}\n  command {' '.join(cmd[:2])} <main prompt> {' '.join(cmd[3:])}")
+                  f"  agent file {cfg / 'agents' / (agent_name(effort, model) + '.md')}\n  command {' '.join(cmd[:2])} <main prompt> {' '.join(cmd[3:])}")
             return
 
-        env = child_env(cfg, brief_file, effort, tmp / "bodies")
+        env = child_env(cfg, brief_file, effort, tmp / "bodies", model)
         t0 = time.monotonic()
         try:
             with open(tmp / "stream.jsonl", "w") as so, open(tmp / "stderr.log", "w") as se:
@@ -410,10 +434,9 @@ def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
             record_error(vdir, case, rep, "dispatch_mismatch",
                          f"subagent received {len(received)} chars, brief has {len(brief)}", models[-1] if models else None, usage)
             return
-        wrong = sorted({m for m in models if m != MODEL})
-        if not models or wrong:
-            record_error(vdir, case, rep, "model_mismatch", f"served {sorted(set(models))}, expected {MODEL}",
-                         models[-1] if models else None, usage)
+        problem = served_model_problem(models, model)
+        if problem:
+            record_error(vdir, case, rep, "model_mismatch", problem, models[-1] if models else None, usage)
             return
 
         efforts = efforts_from_bodies(tmp / "bodies", brief)
@@ -450,7 +473,7 @@ def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
             if f.is_file():
                 shutil.copy(f, raw / f.name)
 
-        agent_md = (cfg / "agents" / f"{agent_name(effort)}.md").read_text(encoding="utf-8")
+        agent_md = (cfg / "agents" / f"{agent_name(effort, model)}.md").read_text(encoding="utf-8")
         (vdir / "traces").mkdir(exist_ok=True)
         (vdir / "traces" / f"{case['id']}_rep{rep}.json").write_text(
             json.dumps(to_trace(sub, agent_md), ensure_ascii=False, indent=1), encoding="utf-8")
@@ -465,7 +488,7 @@ def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
             "meta": {
                 "effort_requested": effort, "effort_seen": effort_evidence(sub, sub_meta),
                 "effort_in_requests": efforts,
-                "tier": case["tier"], "base": case["base"], "exit_code": exit_code, "wall_s": round(wall, 1),
+                "tier": case["tier"], "band": case.get("band"), "base": case["base"], "exit_code": exit_code, "wall_s": round(wall, 1),
                 "dispatch_usage": main_usage, "dispatch_models": sorted(set(main_models)),
                 "leak_signals": leak_signals(uses, case),
                 "original_repo_changed": original_status(case["repo"]) != orig_before,
@@ -473,7 +496,7 @@ def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
             },
         }
         append_jsonl(vdir / "results.jsonl", row)
-        print(f"{case['id']} rep{rep} {effort}: pass={g['grade']['pass']} checks={g['grade']['checks']:.2f} "
+        print(f"{case['id']} rep{rep} {arm}: pass={g['grade']['pass']} checks={g['grade']['checks']:.2f} "
               f"tokens={sum(usage.values())} tools={len(uses)}")
     except Exception as exc:  # harness failure: sidecar, never a zero in results
         record_error(vdir, case, rep, "harness_error", repr(exc))
@@ -506,12 +529,18 @@ def check_gate(data: Path, approve: bool) -> None:
                  f"(or nothing was approved yet). Review them, then rerun with --approve-harness. [{sha[:12]}]")
 
 
-def ensure_change_md(vdir: Path, effort: str) -> None:
-    if effort == "medium" and not (vdir / "change.md").exists():
-        (vdir / "change.md").write_text(
-            "# v1\n\nSubagent effort medium instead of high, set in the agent definition's frontmatter.\n\n"
-            "Everything else is identical to baseline: model, brief, workspace, installed rule files and grader.\n",
-            encoding="utf-8")
+def ensure_change_md(vdir: Path, effort: str, model: str = "opus") -> None:
+    name = variant_dir(model, effort)
+    if name == "baseline" or (vdir / "change.md").exists():
+        return
+    if name == "v1":
+        text = ("# v1\n\nSubagent effort medium instead of high, set in the agent definition's frontmatter.\n\n"
+                "Everything else is identical to baseline: model, brief, workspace, installed rule files and grader.\n")
+    else:
+        text = (f"# {name}\n\nSubagent model {MODEL_IDS[model]} at effort {effort}, set in the agent definition's "
+                f"frontmatter.\n\nEverything else is identical to baseline: dispatching main thread, brief, workspace, "
+                f"installed rule files and grader.\n")
+    (vdir / "change.md").write_text(text, encoding="utf-8")
 
 
 def cmd_run(args) -> int:
@@ -531,11 +560,11 @@ def cmd_run(args) -> int:
         cases = [c for c in cases if c["id"] in wanted]
     elif args.dry_run:
         cases = [next(c for c in cases if c["tier"] == t) for t in TIERS]
-    vdir = data / VARIANT_DIR[args.effort]
+    vdir = data / variant_dir(args.model, args.effort)
     done = set()
     if not args.dry_run:
         vdir.mkdir(parents=True, exist_ok=True)
-        ensure_change_md(vdir, args.effort)
+        ensure_change_md(vdir, args.effort, args.model)
         if (vdir / "results.jsonl").exists():
             done = {(r["prompt_id"], r["rep"]) for r in read_jsonl(vdir / "results.jsonl")}
     todo = [(c, k) for k in range(args.reps) for c in cases if (c["id"], k) not in done]
@@ -562,12 +591,27 @@ def total_tokens(u: dict) -> int:
     return sum((u or {}).values())
 
 
+def ok_rows(vdir: Path) -> list[dict]:
+    return [r for r in read_jsonl(vdir / "results.jsonl") if r.get("status") == "ok"] if (vdir / "results.jsonl").exists() else []
+
+
+def row_band(r: dict):
+    return r["meta"].get("band")
+
+
+def groups(rows: list[dict]) -> list[tuple[str, object]]:
+    """(label, row predicate) for each tier, all, then each band some row carries."""
+    out = [(tier, (lambda r, t=tier: t == "all" or r["meta"]["tier"] == t)) for tier in (*TIERS, "all")]
+    present = {row_band(r) for r in rows}
+    return out + [(f"band {b}", (lambda r, b=b: row_band(r) == b)) for b in BANDS if b in present]
+
+
 def summarize_variant(vdir: Path) -> dict:
-    rows = [r for r in read_jsonl(vdir / "results.jsonl") if r.get("status") == "ok"] if (vdir / "results.jsonl").exists() else []
+    rows = ok_rows(vdir)
     errs = read_jsonl(vdir / "errors.jsonl") if (vdir / "errors.jsonl").exists() else []
     out = {}
-    for tier in (*TIERS, "all"):
-        sub = [r for r in rows if tier == "all" or r["meta"]["tier"] == tier]
+    for tier, keep in groups(rows):
+        sub = [r for r in rows if keep(r)]
         if not sub:
             continue
         k = sum(r["grade"]["pass"] for r in sub)
@@ -586,23 +630,17 @@ def summarize_variant(vdir: Path) -> dict:
     return out
 
 
-def cmd_summarize(args) -> int:
-    data = args.data
-    per = {}
-    for effort, name in VARIANT_DIR.items():
-        vdir = data / name
-        if (vdir / "results.jsonl").exists():
-            summarize_variant(vdir)
-            per[effort] = [r for r in read_jsonl(vdir / "results.jsonl") if r.get("status") == "ok"]
-    if len(per) < 2:
-        return 0
-    print("\npaired by case (mean over reps), high minus medium:")
-    for tier in (*TIERS, "all"):
+def print_paired(ref: str, arm: str, ref_rows: list[dict], arm_rows: list[dict]) -> None:
+    """Per-case mean checks of ref minus arm, with a t interval, per tier, overall and per band."""
+    default = (ref, arm) == (VARIANT_DIR["high"], VARIANT_DIR["medium"])
+    print(f"\npaired by case (mean over reps), {'high minus medium' if default else f'{ref} minus {arm}'}:")
+    tok_label = "medium tokens / high tokens" if default else f"{arm} tokens / {ref} tokens"
+    ids = {r["prompt_id"] for r in ref_rows} & {r["prompt_id"] for r in arm_rows}
+    for label, keep in groups(ref_rows + arm_rows):
         diffs, tok_ratio = [], []
-        ids = {r["prompt_id"] for r in per["high"]} & {r["prompt_id"] for r in per["medium"]}
         for cid in sorted(ids):
-            h = [r for r in per["high"] if r["prompt_id"] == cid and (tier == "all" or r["meta"]["tier"] == tier)]
-            m = [r for r in per["medium"] if r["prompt_id"] == cid and (tier == "all" or r["meta"]["tier"] == tier)]
+            h = [r for r in ref_rows if r["prompt_id"] == cid and keep(r)]
+            m = [r for r in arm_rows if r["prompt_id"] == cid and keep(r)]
             if h and m:
                 diffs.append(statistics.mean(r["grade"]["checks"] for r in h) - statistics.mean(r["grade"]["checks"] for r in m))
                 th = statistics.mean(total_tokens(r["usage"]) for r in h)
@@ -612,17 +650,35 @@ def cmd_summarize(args) -> int:
         if len(diffs) >= 2:
             mean = statistics.mean(diffs)
             half = t975(len(diffs) - 1) * statistics.stdev(diffs) / len(diffs) ** 0.5
-            print(f"  {tier:<9} cases={len(diffs):<3} checks diff {mean:+.3f} (95% CI {mean - half:+.3f} to {mean + half:+.3f}); "
-                  f"medium tokens / high tokens, median {statistics.median(tok_ratio):.2f}")
+            print(f"  {label:<9} cases={len(diffs):<3} checks diff {mean:+.3f} (95% CI {mean - half:+.3f} to {mean + half:+.3f}); "
+                  f"{tok_label}, median {statistics.median(tok_ratio):.2f}")
+
+
+def cmd_summarize(args) -> int:
+    data = args.data
+    ref = getattr(args, "ref", VARIANT_DIR["high"])
+    arms = [a for a in getattr(args, "arms", VARIANT_DIR["medium"]).split(",") if a and a != ref]
+    per = {}
+    for name in (ref, *arms):
+        vdir = data / name
+        if (vdir / "results.jsonl").exists():
+            summarize_variant(vdir)
+            per[name] = ok_rows(vdir)
+    if ref not in per:
+        return 0
+    for arm in arms:
+        if arm in per:
+            print_paired(ref, arm, per[ref], per[arm])
     return 0
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run")
     r.add_argument("--data", required=True, type=Path)
-    r.add_argument("--effort", required=True, choices=sorted(VARIANT_DIR))
+    r.add_argument("--model", choices=sorted(MODEL_IDS), default="opus", help="the subagent's model")
+    r.add_argument("--effort", required=True, choices=EFFORTS)
     r.add_argument("--reps", type=int, default=1)
     r.add_argument("--cases", default="")
     r.add_argument("--concurrency", type=int, default=2)
@@ -634,7 +690,13 @@ def main() -> int:
     r.add_argument("--keep", action="store_true", help="keep workspaces and config dirs")
     s = sub.add_parser("summarize")
     s.add_argument("--data", required=True, type=Path)
-    args = ap.parse_args()
+    s.add_argument("--ref", default=VARIANT_DIR["high"], help="arm directory every other arm is paired against")
+    s.add_argument("--arms", default=VARIANT_DIR["medium"], help="comma-separated arm directories to compare with --ref")
+    return ap
+
+
+def main() -> int:
+    args = build_parser().parse_args()
     return cmd_run(args) if args.cmd == "run" else cmd_summarize(args)
 
 
