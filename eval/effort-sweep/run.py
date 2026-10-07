@@ -20,6 +20,7 @@ usage is kept apart as dispatch overhead.
   python3 eval/effort-sweep/run.py summarize --data "$DATA"
   python3 eval/effort-sweep/run.py summarize --data "$DATA" --ref baseline --arms haiku-high,haiku-max
   python3 eval/effort-sweep/run.py run --data "$DATA" --effort high --dry-run   # no model call
+  python3 eval/effort-sweep/run.py reprice --data "$DATA" --arms baseline,v1   # cost_usd from raw transcripts
 
 The first real run stops with exit 2 until the user runs it once with
 --approve-harness, which records a hash of the runner, grader, cases and the
@@ -64,6 +65,16 @@ METRICS = [
     {"id": "pass", "label": "通过", "kind": "binary"},
     {"id": "checks", "label": "检查点比例", "kind": "continuous"},
 ]
+# List prices in US dollars per million tokens, from https://platform.claude.com/docs/en/about-claude/pricing
+# (retrieved 2026-10-08). Each tuple is (input, 5-minute cache write, 1-hour cache write, cache read, output).
+# Haiku bills a whole request at the higher row once its prompt (input plus cache reads plus cache writes)
+# exceeds HAIKU_LONG_PROMPT tokens.
+PRICES = {
+    "claude-opus-5-5": (4.0, 5.0, 8.0, 0.20, 20.0),
+    "claude-haiku-5-5": (0.10, 0.125, 0.20, 0.01, 0.50),
+}
+HAIKU_LONG = (0.50, 0.625, 1.00, 0.05, 2.50)
+HAIKU_LONG_PROMPT = 100_000
 HARNESS_FILES = [HERE / "run.py", HERE / "grade.py", HERE / "common.py",
                  HARNESS / "CLAUDE.md", HARNESS / "orchestrator-playbook.md", HARNESS / "settings.example.json"]
 
@@ -203,6 +214,35 @@ def sum_usage(records: list[dict]) -> tuple[dict, list[str], str | None]:
         for k in usage:
             usage[k] += u.get(k) or 0
     return usage, models, stop
+
+
+def request_costs(records: list[dict]) -> tuple[float, int]:
+    """Dollar cost of the assistant requests at list prices, and how many requests had no known price.
+
+    A message spread over several transcript lines is priced once, from its last line, as `sum_usage` counts it.
+    """
+    per_msg = {}
+    for r in records:
+        msg = r.get("message", {}) if r.get("type") == "assistant" else {}
+        if msg.get("usage"):
+            per_msg[msg.get("id") or id(r)] = (msg.get("model"), msg["usage"])
+    total, unpriced = 0.0, 0
+    for model, u in per_msg.values():
+        rates = PRICES.get(model)
+        if rates is None:
+            unpriced += 1
+            continue
+        inp, cr, cw = (u.get(k) or 0 for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+        if model == MODEL_IDS["haiku"] and inp + cr + cw > HAIKU_LONG_PROMPT:
+            rates = HAIKU_LONG
+        split = u.get("cache_creation")
+        if isinstance(split, dict):
+            w5, w1 = split.get("ephemeral_5m_input_tokens") or 0, split.get("ephemeral_1h_input_tokens") or 0
+        else:
+            w5, w1 = cw, 0
+        total += (inp * rates[0] + w5 * rates[1] + w1 * rates[2] + cr * rates[3]
+                  + (u.get("output_tokens") or 0) * rates[4]) / 1_000_000
+    return total, unpriced
 
 
 def api_failure(stream: list[dict], sub: list[dict]) -> str | None:
@@ -427,7 +467,10 @@ def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
         meta_path = sub_files[0].with_suffix(".meta.json")
         sub_meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
         usage, models, stop = sum_usage(sub)
-        main_usage, main_models, _ = sum_usage(read_jsonl(main_files[0])) if main_files else ({}, [], None)
+        main_records = read_jsonl(main_files[0]) if main_files else []
+        main_usage, main_models, _ = sum_usage(main_records) if main_files else ({}, [], None)
+        cost, unpriced = request_costs(sub)
+        dispatch_cost, dispatch_unpriced = request_costs(main_records)
 
         received = first_user_text(sub)
         if normalise_brief(received) != normalise_brief(brief):
@@ -483,13 +526,14 @@ def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
             "tags": [TIER_LABELS[case["tier"]], Path(case["repo"]).name],
             "status": "truncated" if stop == "max_tokens" else "ok", "stop_reason": stop,
             "grade": g["grade"], "explanation": g["explanation"],
-            "model": models[-1], "usage": usage, "latency_s": round(span if span is not None else wall, 1),
+            "model": models[-1], "usage": usage, "cost_usd": round(cost, 6), "latency_s": round(span if span is not None else wall, 1),
             "tool_calls": len(uses),
             "meta": {
                 "effort_requested": effort, "effort_seen": effort_evidence(sub, sub_meta),
                 "effort_in_requests": efforts,
                 "tier": case["tier"], "band": case.get("band"), "base": case["base"], "exit_code": exit_code, "wall_s": round(wall, 1),
                 "dispatch_usage": main_usage, "dispatch_models": sorted(set(main_models)),
+                "dispatch_cost_usd": round(dispatch_cost, 6), "unpriced_requests": unpriced + dispatch_unpriced,
                 "leak_signals": leak_signals(uses, case),
                 "original_repo_changed": original_status(case["repo"]) != orig_before,
                 "grade_detail": g["detail"], "report_chars": len(report),
@@ -606,6 +650,11 @@ def groups(rows: list[dict]) -> list[tuple[str, object]]:
     return out + [(f"band {b}", (lambda r, b=b: row_band(r) == b)) for b in BANDS if b in present]
 
 
+def row_cost(r: dict):
+    """The attempt's subagent cost in dollars, or None for a row priced by neither `run` nor `reprice`."""
+    return r.get("cost_usd")
+
+
 def summarize_variant(vdir: Path) -> dict:
     rows = ok_rows(vdir)
     errs = read_jsonl(vdir / "errors.jsonl") if (vdir / "errors.jsonl").exists() else []
@@ -622,10 +671,15 @@ def summarize_variant(vdir: Path) -> dict:
                      "checks": statistics.mean(r["grade"]["checks"] for r in sub),
                      "tok_med": statistics.median(toks), "tok_min": min(toks), "tok_max": max(toks),
                      "out_med": statistics.median(outs), "lat_med": statistics.median(r["latency_s"] for r in sub)}
+        costs = [row_cost(r) for r in sub if row_cost(r) is not None]
+        cost_text = ""
+        if costs:
+            out[tier].update(cost=sum(costs), cost_med=statistics.median(costs))
+            cost_text = f", cost ${sum(costs):.2f} (median ${statistics.median(costs):.3f}/attempt)"
         s = out[tier]
         print(f"{vdir.name:<8} {tier:<9} n={s['n']:<3} pass {s['pass']:.0%} [{lo:.0%}, {hi:.0%}]  checks {s['checks']:.2f}  "
               f"tokens median {s['tok_med']:,.0f} (range {s['tok_min']:,}-{s['tok_max']:,}), output median {s['out_med']:,.0f}, "
-              f"latency median {s['lat_med']:.0f}s")
+              f"latency median {s['lat_med']:.0f}s{cost_text}")
     print(f"{vdir.name:<8} errors {len(errs)} (see errors.jsonl)")
     return out
 
@@ -637,7 +691,7 @@ def print_paired(ref: str, arm: str, ref_rows: list[dict], arm_rows: list[dict])
     tok_label = "medium tokens / high tokens" if default else f"{arm} tokens / {ref} tokens"
     ids = {r["prompt_id"] for r in ref_rows} & {r["prompt_id"] for r in arm_rows}
     for label, keep in groups(ref_rows + arm_rows):
-        diffs, tok_ratio = [], []
+        diffs, tok_ratio, cost_ref, cost_arm = [], [], 0.0, 0.0
         for cid in sorted(ids):
             h = [r for r in ref_rows if r["prompt_id"] == cid and keep(r)]
             m = [r for r in arm_rows if r["prompt_id"] == cid and keep(r)]
@@ -647,11 +701,17 @@ def print_paired(ref: str, arm: str, ref_rows: list[dict], arm_rows: list[dict])
                 tm = statistics.mean(total_tokens(r["usage"]) for r in m)
                 if th:
                     tok_ratio.append(tm / th)
+                ch = [row_cost(r) for r in h if row_cost(r) is not None]
+                cm = [row_cost(r) for r in m if row_cost(r) is not None]
+                if ch and cm:
+                    cost_ref += statistics.mean(ch)
+                    cost_arm += statistics.mean(cm)
         if len(diffs) >= 2:
             mean = statistics.mean(diffs)
             half = t975(len(diffs) - 1) * statistics.stdev(diffs) / len(diffs) ** 0.5
             print(f"  {label:<9} cases={len(diffs):<3} checks diff {mean:+.3f} (95% CI {mean - half:+.3f} to {mean + half:+.3f}); "
-                  f"{tok_label}, median {statistics.median(tok_ratio):.2f}")
+                  f"{tok_label}, median {statistics.median(tok_ratio):.2f}"
+                  + (f"; {arm} cost / {ref} cost {cost_arm / cost_ref:.2f}" if cost_ref else ""))
 
 
 def cmd_summarize(args) -> int:
@@ -669,6 +729,30 @@ def cmd_summarize(args) -> int:
     for arm in arms:
         if arm in per:
             print_paired(ref, arm, per[ref], per[arm])
+    return 0
+
+
+def cmd_reprice(args) -> int:
+    """Recompute each row's cost_usd from its raw subagent transcript, rewriting results.jsonl in place."""
+    for name in [a for a in args.arms.split(",") if a]:
+        path = args.data / name / "results.jsonl"
+        if not path.exists():
+            print(f"{name}: no results.jsonl")
+            continue
+        rows, missing, unpriced = read_jsonl(path), 0, 0
+        for r in rows:
+            raw = args.data / name / "raw" / f"{r['prompt_id']}_rep{r['rep']}" / "subagent.jsonl"
+            if raw.exists():
+                cost, n = request_costs(read_jsonl(raw))
+                r["cost_usd"], unpriced = round(cost, 6), unpriced + n
+            else:
+                r["cost_usd"], missing = None, missing + 1
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+        os.replace(tmp, path)
+        total = sum(r["cost_usd"] for r in rows if r["cost_usd"] is not None)
+        print(f"{name}: repriced {len(rows) - missing} row(s), total ${total:.2f}; {missing} without raw transcript "
+              f"(cost_usd null); {unpriced} unpriced request(s)")
     return 0
 
 
@@ -692,12 +776,16 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--data", required=True, type=Path)
     s.add_argument("--ref", default=VARIANT_DIR["high"], help="arm directory every other arm is paired against")
     s.add_argument("--arms", default=VARIANT_DIR["medium"], help="comma-separated arm directories to compare with --ref")
+    p = sub.add_parser("reprice", help="recompute cost_usd of existing rows from their raw subagent transcripts")
+    p.add_argument("--data", required=True, type=Path)
+    p.add_argument("--arms", default=f"{VARIANT_DIR['high']},{VARIANT_DIR['medium']}",
+                   help="comma-separated arm directories to reprice")
     return ap
 
 
 def main() -> int:
     args = build_parser().parse_args()
-    return cmd_run(args) if args.cmd == "run" else cmd_summarize(args)
+    return {"run": cmd_run, "summarize": cmd_summarize, "reprice": cmd_reprice}[args.cmd](args)
 
 
 if __name__ == "__main__":
