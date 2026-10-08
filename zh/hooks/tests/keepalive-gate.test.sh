@@ -205,7 +205,7 @@ report allow "$(SL=2 DL=1 verdict "$(payload "$t")")" "醒来已过截止（如�
 python3 -c '
 import http.server, socketserver, sys
 s = socketserver.TCPServer(("127.0.0.1", 0), http.server.SimpleHTTPRequestHandler)
-open(sys.argv[1] + ".tmp", "w").write(str(s.server_port))
+open(sys.argv[1] + ".tmp", "w").write(str(s.server_address[1]))
 __import__("os").replace(sys.argv[1] + ".tmp", sys.argv[1])
 s.serve_forever()' "$TMP/http.port" >"$TMP/http.log" 2>&1 &
 HTTP_PID=$!
