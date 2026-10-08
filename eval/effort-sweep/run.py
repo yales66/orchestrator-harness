@@ -297,6 +297,73 @@ def tool_uses(records: list[dict]) -> list[dict]:
     return out
 
 
+PLACEHOLDERS = ("{ws}/", "{out}/")
+
+
+def answer_file_key(tmpl: str) -> str:
+    """File name under raw/<case>_rep<k>/answer_files/ for an answer_files template: the path after {ws}/ or {out}/,
+    with / turned into __."""
+    for ph in PLACEHOLDERS:
+        if tmpl.startswith(ph):
+            tmpl = tmpl[len(ph):]
+            break
+    return tmpl.lstrip("/").replace("/", "__")
+
+
+def resolve_answer_file(tmpl: str, ws: Path, out_dir: Path) -> Path:
+    # Same substitution as common.read_answer_files.
+    return Path(tmpl.replace("{ws}", str(ws)).replace("{out}", str(out_dir)))
+
+
+def save_answer_files(case: dict, ws: Path, out_dir: Path, raw: Path) -> None:
+    """Copy each answer file the grader read into raw/answer_files/, since the workspace holding it is deleted."""
+    for tmpl in case.get("answer_files", []):
+        src = resolve_answer_file(tmpl, ws, out_dir)
+        if src.is_file():
+            (raw / "answer_files").mkdir(parents=True, exist_ok=True)
+            shutil.copy(src, raw / "answer_files" / answer_file_key(tmpl))
+
+
+def rebuild_answer_file(records: list[dict], tmpl: str) -> str | None:
+    """Content of an answer file as the subagent's Write and Edit calls left it, or None when no Write made it.
+
+    {ws} is the transcript's cwd, where the attempt ran; {out} is a directory named `out` whose full path the
+    transcript does not record, so its files are matched by that suffix. Calls whose tool_result is an error
+    did not change the file and are skipped.
+    """
+    cwd = next((r["cwd"] for r in records if r.get("cwd")), None)
+    if tmpl.startswith("{ws}/"):
+        rel = tmpl[len("{ws}/"):]
+        if cwd:
+            target = os.path.normpath(os.path.join(cwd, rel))
+            matches = lambda p: os.path.normpath(os.path.join(cwd, p)) == target
+        else:
+            matches = lambda p: p.endswith("/" + rel)
+    elif tmpl.startswith("{out}/"):
+        suffix = "/out/" + tmpl[len("{out}/"):]
+        matches = lambda p: p.endswith(suffix)
+    else:
+        matches = lambda p: os.path.normpath(p) == os.path.normpath(tmpl)
+
+    failed = set()
+    for r in records:
+        if r.get("type") == "user":
+            for c in r.get("message", {}).get("content", []) or []:
+                if isinstance(c, dict) and c.get("type") == "tool_result" and c.get("is_error"):
+                    failed.add(c.get("tool_use_id"))
+    text = None
+    for use in tool_uses(records):
+        inp = use.get("input") or {}
+        if use.get("id") in failed or not matches(str(inp.get("file_path", ""))):
+            continue
+        if use.get("name") == "Write":
+            text = inp.get("content", "")
+        elif use.get("name") == "Edit" and text is not None:
+            old, new = inp.get("old_string", ""), inp.get("new_string", "")
+            text = text.replace(old, new) if inp.get("replace_all") else text.replace(old, new, 1)
+    return text
+
+
 def effort_evidence(records: list[dict], meta: dict) -> list[str]:
     """Every value stored under a key containing 'effort', to show which effort the subagent actually ran at."""
     found = []
@@ -515,6 +582,7 @@ def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
         for f in out_dir.glob("*"):
             if f.is_file():
                 shutil.copy(f, raw / f.name)
+        save_answer_files(case, ws, out_dir, raw)
 
         agent_md = (cfg / "agents" / f"{agent_name(effort, model)}.md").read_text(encoding="utf-8")
         (vdir / "traces").mkdir(exist_ok=True)
@@ -764,6 +832,90 @@ def cmd_reprice(args) -> int:
     return 0
 
 
+def regrade_row(case: dict, raw: Path, row: dict, sources: dict) -> dict:
+    """grade_text of an existing text-tier row against `case`, from the report and answer files kept in `raw`.
+
+    Each answer file comes from raw/answer_files/ when saved there, else from the transcript's Write and Edit
+    calls; `sources` counts saved / rebuilt / missing. The files are laid out in a scratch ws and out dir so
+    that read_answer_files joins them to the report exactly as run_attempt did. The workspace's change list
+    is not kept in rows, only grade_detail.stray_writes (the changes outside allowed_outputs), so that is
+    what readonly is judged on.
+    """
+    records = read_jsonl(raw / "subagent.jsonl")
+    with tempfile.TemporaryDirectory(prefix="effort-sweep-regrade-") as td:
+        ws, out_dir = Path(td) / "ws", Path(td) / "out"
+        ws.mkdir()
+        out_dir.mkdir()
+        for tmpl in case.get("answer_files", []):
+            if not tmpl.startswith(PLACEHOLDERS):  # only {ws}/{out} paths can be laid out in the scratch dirs
+                sources["missing"] += 1
+                continue
+            saved = raw / "answer_files" / answer_file_key(tmpl)
+            dest = resolve_answer_file(tmpl, ws, out_dir)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if saved.is_file():
+                shutil.copy(saved, dest)
+                sources["saved"] += 1
+            elif (text := rebuild_answer_file(records, tmpl)) is not None:
+                dest.write_bytes(text.encode("utf-8", errors="surrogatepass"))
+                sources["rebuilt"] += 1
+            else:
+                sources["missing"] += 1
+        answer = final_report(records) + read_answer_files(case, ws, out_dir)
+    changed = ((row.get("meta") or {}).get("grade_detail") or {}).get("stray_writes") or []
+    return grade_text(case, answer, changed)
+
+
+def cmd_regrade(args) -> int:
+    """Re-grade each ok text-tier row against the current cases.jsonl, rewriting results.jsonl in place."""
+    from datetime import datetime, timezone
+
+    cases = {c["id"]: c for c in load_cases(args.data / "cases.jsonl", include_excluded=True)}
+    for name in [a for a in args.arms.split(",") if a]:
+        path = args.data / name / "results.jsonl"
+        if not path.exists():
+            print(f"{name}: no results.jsonl")
+            continue
+        rows = read_jsonl(path)
+        sources = {"saved": 0, "rebuilt": 0, "missing": 0}
+        done = pass_changed = checks_changed = no_case = no_raw = 0
+        for r in rows:
+            meta = r.get("meta") or {}
+            if r.get("status") != "ok" or meta.get("tier") == "impl":
+                continue
+            raw = args.data / name / "raw" / f"{r['prompt_id']}_rep{r['rep']}"
+            if r["prompt_id"] not in cases:
+                no_case += 1
+                continue
+            if not (raw / "subagent.jsonl").exists():
+                no_raw += 1
+                continue
+            g = regrade_row(cases[r["prompt_id"]], raw, r, sources)
+            old, new = r["grade"], g["grade"]
+            done += 1
+            pass_changed += int(old["pass"]) != int(new["pass"])
+            checks_changed += old["checks"] != new["checks"]
+            if args.dry_run or old != new:
+                print(f"  {name} {r['prompt_id']} rep{r['rep']}: pass {int(old['pass'])}->{int(new['pass'])} "
+                      f"checks {old['checks']:.2f}->{new['checks']:.2f}")
+            if args.dry_run:
+                continue
+            meta.setdefault("grade_original", old)
+            r["grade"], r["explanation"] = new, g["explanation"]
+            meta["grade_detail"] = g["detail"]
+            meta["regraded_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            r["meta"] = meta
+        if not args.dry_run:
+            tmp = path.with_name(path.name + ".tmp")
+            tmp.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+            os.replace(tmp, path)
+        print(f"{name}: regraded {done} row(s), pass changed on {pass_changed}, checks changed on {checks_changed}; "
+              f"answer files saved {sources['saved']}, rebuilt {sources['rebuilt']}, missing {sources['missing']}; "
+              f"skipped {no_case} with no case, {no_raw} with no raw transcript"
+              + ("; dry run, nothing written" if args.dry_run else ""))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -788,12 +940,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--data", required=True, type=Path)
     p.add_argument("--arms", default=f"{VARIANT_DIR['high']},{VARIANT_DIR['medium']}",
                    help="comma-separated arm directories to reprice")
+    g = sub.add_parser("regrade", help="re-grade ok text-tier rows against the current cases.jsonl from raw/")
+    g.add_argument("--data", required=True, type=Path)
+    g.add_argument("--arms", default=f"{VARIANT_DIR['high']},{VARIANT_DIR['medium']}",
+                   help="comma-separated arm directories to regrade")
+    g.add_argument("--dry-run", action="store_true", help="print each row's old->new pass and checks; write nothing")
     return ap
 
 
 def main() -> int:
     args = build_parser().parse_args()
-    return {"run": cmd_run, "summarize": cmd_summarize, "reprice": cmd_reprice}[args.cmd](args)
+    return {"run": cmd_run, "summarize": cmd_summarize, "reprice": cmd_reprice,
+            "regrade": cmd_regrade}[args.cmd](args)
 
 
 if __name__ == "__main__":
