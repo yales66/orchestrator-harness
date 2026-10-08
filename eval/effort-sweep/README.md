@@ -203,7 +203,7 @@ Haiku uses more tokens than opus on the same brief, an impl median ratio of 1.8 
 
 At list prices the sweep's subagents cost about $46: $24.5 for the opus reference and $19.9 for the haiku arms, of which $9.86 at `xhigh`, $6.38 at `high` and $3.68 at `medium`, plus $1.26 for the haiku `max` pilot. The dispatching main thread added about $0.14 per attempt, and the audits and drafting by Opus subagents are not included. The runs themselves drew on a subscription allowance.
 
-ADR 0019 (`docs/adr/0019-implementer-runs-on-haiku-when-the-brief-fixes-its-self-check.md`) records the decision these results support: `implementer` runs on haiku at `medium` when existing tests or acceptance cases listed in the brief decide every changed behaviour, and on opus otherwise; `retriever` stays on opus at `medium`, and `researcher` is unchanged.
+ADR 0021 (`docs/adr/0021-implementer-runs-on-haiku-when-tests-decide-every-change.md`) records the decision these results support: `implementer` runs on haiku at `medium` when existing tests or acceptance cases listed in the brief decide every changed behaviour, and on opus otherwise; `retriever` stays on opus at `medium`, and `researcher` is unchanged.
 
 ## Files
 
