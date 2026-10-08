@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from common import EXCLUDE, TIER_LABELS, TIERS, load_cases  # noqa: E402
+from common import TIER_LABELS, TIERS, load_cases  # noqa: E402
 
 CSS = """
 :root { --bg:#fbfaf7; --fg:#1f2328; --muted:#5d6570; --line:#d9d6cf; --card:#ffffff; --accent:#2f5d8a; --code:#f2f0ea; --tag:#e8eef5; }
@@ -74,14 +74,10 @@ def grading_block(c: dict) -> str:
 
 
 def excluded_block(every_case: list[dict]) -> str:
-    known = {c["id"]: c for c in every_case}
-    rows = []
-    for cid, reason in EXCLUDE.items():
-        c = known.get(cid)
-        tier = esc(TIER_LABELS[c["tier"]]) if c else "未收录"
-        summary = esc(c["summary"]) if c else "未收录"
-        rows.append(f"<tr><td><code>{esc(cid)}</code></td><td>{tier}</td><td>{summary}</td><td>{esc(reason)}</td></tr>")
-    return (f"<h2 id='excluded'>剔除的案例</h2><p>以下 {len(EXCLUDE)} 个案例不参加运行，运行脚本、自检脚本与本页读取案例时都会跳过它们。</p>"
+    excluded = [c for c in every_case if "exclude" in c]
+    rows = [f"<tr><td><code>{esc(c['id'])}</code></td><td>{esc(TIER_LABELS[c['tier']])}</td>"
+            f"<td>{esc(c['summary'])}</td><td>{esc(c['exclude'])}</td></tr>" for c in excluded]
+    return (f"<h2 id='excluded'>剔除的案例</h2><p>以下 {len(excluded)} 个案例不参加运行，运行脚本、自检脚本与本页读取案例时都会跳过它们。</p>"
             f"<div class=wrap><table><tr><th>案例</th><th>层级</th><th>派发目标</th><th>剔除理由</th></tr>{''.join(rows)}</table></div>")
 
 
@@ -95,7 +91,7 @@ def render(cases: list[dict], every_case: list[dict]) -> str:
         "<!doctype html><html lang=zh><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>",
         f"<title>Effort Sweep 输入集</title><style>{CSS}</style></head><body><main>",
         "<h1>Effort Sweep 输入集</h1>",
-        f"<p>同一份派发说明分别交给推理强度设为 high 和 medium 的子智能体，比较完成质量与花费。以下是参加运行的全部案例，取自 2026-09-16 至 2026-09-29 主会话里的真实派发；每个案例在派发当时的提交上建临时工作区运行。另有 {len(EXCLUDE)} 个案例已剔除，理由列在<a href='#excluded'>剔除的案例</a>一节。</p>",
+        f"<p>同一份派发说明分别交给推理强度设为 high 和 medium 的子智能体，比较完成质量与花费。以下是参加运行的全部案例，取自 2026-09-16 至 2026-09-29 主会话里的真实派发；每个案例在派发当时的提交上建临时工作区运行。另有 {len(every_case) - len(cases)} 个案例已剔除，理由列在<a href='#excluded'>剔除的案例</a>一节。</p>",
         f"<div class=wrap><table><tr><th>层级</th><th>案例数</th></tr>{tier_rows}<tr><td>合计</td><td>{len(cases)}</td></tr></table></div>",
         "<p>单案的历史花费取自原子智能体记录里各次请求的用量之和（未缓存输入、输出、缓存读写合计），是历史值而不是试跑值；原记录的模型见各案。</p>",
         excluded_block(every_case),
@@ -127,7 +123,7 @@ def main() -> int:
     order = {t: i for i, t in enumerate(TIERS)}
     cases.sort(key=lambda c: (order[c["tier"]], c["id"]))
     (args.data / "inputs.html").write_text(render(cases, every_case), encoding="utf-8")
-    print(f"wrote {args.data / 'inputs.html'} with {len(cases)} cases, {len(EXCLUDE)} excluded")
+    print(f"wrote {args.data / 'inputs.html'} with {len(cases)} cases, {len(every_case) - len(cases)} excluded")
     return 0
 
 

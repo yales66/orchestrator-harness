@@ -67,6 +67,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | `handoff` skill | Step 0 is skipped when the last keepalive wake-up judges a handoff needed, and pending questions go into the brief's open items marked as awaiting the user instead of being asked again |
 | `settings.example.json` | Registers `limit-pause-gate.sh` on PreToolUse `*` with `"timeout": 3300`, and sets `statusline-tee.sh` as the `statusLine` command |
 | Playbook §2 | `implementer` is dispatched on haiku when existing tests or acceptance cases listed in the brief (inputs and expected outputs, edge cases included) decide every changed behaviour, and on opus otherwise, including when any of it is judged only by tests the subagent writes; `retriever`, `researcher` and the other dispatches the playbook already sent to opus stay there. See [ADR 0021](docs/adr/0021-implementer-runs-on-haiku-when-tests-decide-every-change.md) |
+| Effort sweep exclusions | An excluded case carries its reason in an `exclude` field of its row in the private `cases.jsonl`, and `load_cases` refuses an exclusion without a reason; the runner no longer holds case ids, and the README describes each exclusion without its id |
 
 ### Fixed
 
