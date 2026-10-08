@@ -43,22 +43,16 @@ NOISE_PATTERNS = (
     "**/.next/**",
 )
 
-# Cases dropped from the sweep, each with its reason. Every tier keeps one case
-# per repository and task type, so a brief that repeats another case's
-# repository, template and problem class adds cost without adding a kind of
-# dispatch. The filter sits in load_cases, so the runner, the self-test and the
-# inputs page all skip these ids even when a rebuilt cases.jsonl still holds them.
-EXCLUDE: dict[str, str] = {
-    "impl-aggregator-providers": "与 impl-workday-paging 同仓库、同为改一个外部数据源的抓取代码，重复",
-    "lookup-obs-api": "与 lookup-obs-external 同为后端可观测性盘点，同一派发模板",
-    "lookup-obs-worker": "与 lookup-obs-external 同为后端可观测性盘点，同一派发模板",
-    "judge-recheck-r4-r11": "「在 main 上复核根治项」同模板同仓库共 5 条，与 judge-recheck-r5 问题类别重叠",
-    "judge-recheck-r5": "「在 main 上复核根治项」同模板同仓库共 5 条，与 judge-recheck-r4-r11 问题类别重叠",
-}
+# A case row may carry `exclude`, the reason it is dropped from the sweep: each
+# tier keeps one case per repository and task type, so a brief that repeats
+# another case's repository, template and problem class adds cost without adding
+# a kind of dispatch. The reason lives in the private cases.jsonl, beside the
+# brief it describes, and the filter sits in load_cases, so the runner, the
+# self-test and the inputs page all skip those cases.
 
 
 def load_cases(path: Path, include_excluded: bool = False) -> list[dict]:
-    """Cases in `path`, leaving out the ids in EXCLUDE unless `include_excluded` is set."""
+    """Cases in `path`, leaving out those that carry `exclude` unless `include_excluded` is set."""
     cases = []
     with open(path, encoding="utf-8") as fh:
         for line in fh:
@@ -68,9 +62,12 @@ def load_cases(path: Path, include_excluded: bool = False) -> list[dict]:
     ids = [c["id"] for c in cases]
     if len(ids) != len(set(ids)):
         raise SystemExit("duplicate case ids in " + str(path))
+    for c in cases:
+        if "exclude" in c and not str(c["exclude"]).strip():
+            raise SystemExit(f"case {c['id']} in {path} is excluded without a reason")
     if include_excluded:
         return cases
-    return [c for c in cases if c["id"] not in EXCLUDE]
+    return [c for c in cases if "exclude" not in c]
 
 
 # ---------------------------------------------------------------- globbing

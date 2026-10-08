@@ -14,15 +14,13 @@ The cases are split into three tiers, because the decision is expected to differ
 | lookup | read-only retrieval and extraction | the final report against conclusions the main thread later adopted | 6 |
 | judgement | read-only review or diagnosis that needs judgement | the same, against the adopted verdicts | 6 |
 
-`cases.jsonl` holds 25 cases; five of them are excluded because each repeats a retained case's repository, brief template and problem class, so it adds cost without adding a kind of dispatch. `EXCLUDE` in `common.py` maps each excluded id to its reason and `load_cases` drops those ids, so the runner, the self-test and `inputs.html` skip them even when a rebuilt `cases.jsonl` still holds them; `inputs.html` lists them with their reasons.
+`cases.jsonl` holds 25 cases; five of them are excluded because each repeats a retained case's repository, brief template and problem class, so it adds cost without adding a kind of dispatch. An excluded case carries its reason in an `exclude` field of its row, and `load_cases` drops every row that has one, so the runner, the self-test and `inputs.html` skip them; `inputs.html` lists them with their reasons. Case ids name private projects, so the table below describes each exclusion without its id.
 
-| Excluded case | Repeats |
+| Excluded | Repeats |
 |---|---|
-| impl-aggregator-providers | impl-workday-paging: same repository, both change the code of one data source the project fetches from |
-| lookup-obs-api | lookup-obs-external: same backend observability inventory, same brief template |
-| lookup-obs-worker | lookup-obs-external, as above |
-| judge-recheck-r4-r11 | one of five rechecks of root-cause fixes on `main` from one template in one repository; overlaps judge-recheck-r5 in problem class. The design document of that repository numbers its confirmed defects R1 to R12, and the suffix of each recheck id names the defects its brief rechecks, here R4 and R11 |
-| judge-recheck-r5 | the same series; overlaps judge-recheck-r4-r11 |
+| one impl case | a retained impl case in the same repository; both change the code of one data source the project fetches from |
+| two lookup cases | a retained lookup case: the same backend observability inventory, from the same brief template |
+| two judgement cases | each other: two of five rechecks of root-cause fixes on `main`, from one template in one repository, overlapping in problem class |
 
 A brief qualifies only if its repository still exists and the commit it was written against can be located from the dispatch timestamp. Briefs that contain credentials are excluded. For an impl case the self-verification commands must also run offline and the change that later landed must pass them; parts of a self-verification that need the network, a running server or a screenshot are listed per case as ungraded. For a read-only case the report must state its conclusions itself, and those conclusions must reappear in a later brief, commit or design document, which is recorded per case as `adopted_in`. Files a read-only brief read from a session scratch directory are carried inside `cases.jsonl` and restored at run time.
 
