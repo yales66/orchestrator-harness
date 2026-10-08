@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. In effect since 8 October 2026. It changes only the model the main thread sets when it dispatches `implementer`; the effort settings of [ADR 0008](0008-subagent-effort-per-kind-of-dispatch.md) stand, and the playbook's routing of every other kind of dispatch is unchanged.
+Accepted. In effect since 8 October 2026; its `retriever` row is amended by [ADR 0022](0022-retriever-runs-on-haiku-when-the-brief-limits-it-to-local-files-or-one-named-page.md) from 9 October 2026. It changes only the model the main thread sets when it dispatches `implementer`; the effort settings of [ADR 0008](0008-subagent-effort-per-kind-of-dispatch.md) stand, and the playbook's routing of every other kind of dispatch is unchanged.
 
 ## Context
 
@@ -48,7 +48,7 @@ The condition exists because of how a first implementation is checked. When the 
 
 The grading baseline leans towards the reference arm. Lookup checks come from the reports the main thread adopted, mostly written by opus, and landed tests come from changes opus made; the audit removed checks for facts no brief asked for, but the lookup verdict in particular should be read with that lean in mind.
 
-A checklist at the end of each lookup brief, asking for an official source and a quoted sentence per conclusion for the routes tried before "not found", and for another route after a 403, a 404 or an unreadable PDF, was tried on haiku at `high`. It cleared the bar once under checks revised after the original four arms were unblinded and failed a confirmation run with those checks frozen, so `retriever` stays on opus; the section "Lookup follow-up" of `eval/effort-sweep/README.md` has the figures, and shows that part of the lookup gap above came from how the checks were written. Two follow-ups remain open. More lookup cases at `xhigh`, not more reps, would narrow an interval that six cases leave wide. Since Claude Code 2.1.292 the Agent tool accepts effort per call, which ADR 0008 said should lead to merging `researcher` and `retriever` into one read-only definition; that merge has not been made.
+A checklist at the end of each lookup brief, asking for an official source and a quoted sentence per conclusion, for the URLs and search terms tried before "not found", and for another route after a 403, a 404 or an unreadable PDF, was tried on haiku at `high`. It cleared the bar once under checks revised after the original four arms were unblinded and failed a confirmation run with those checks frozen, so the competence rule keeps `retriever` on opus; [ADR 0022](0022-retriever-runs-on-haiku-when-the-brief-limits-it-to-local-files-or-one-named-page.md) sends lookups that the brief limits to local files, session transcripts or one named web page to haiku by judgement; the section "Lookup follow-up" of `eval/effort-sweep/README.md` has the figures, and shows that part of the lookup gap above came from how the checks were written. Two follow-ups remain open. More lookup cases at `xhigh`, not more reps, would narrow an interval that six cases leave wide. Since Claude Code 2.1.292 the Agent tool accepts effort per call, which ADR 0008 said should lead to merging `researcher` and `retriever` into one read-only definition; that merge has not been made.
 
 ## Sources
 

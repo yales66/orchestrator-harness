@@ -24,6 +24,22 @@
   <img src="../docs/architecture.zh.light.svg" alt="架构图，画的是一轮工作怎样运行。会话开始、/clear 与压缩之后，SessionStart 钩子把编排手册注入主线程，子智能体收不到。用户本人键入的消息提到生产模式时，UserPromptSubmit 钩子给主线程注入一句说明，讲怎样设置与取消仓库的生产标记。主线程向子智能体发出派发说明，子智能体凭 agents/*.md 里设定了推理强度的定义、CLAUDE.md 与派发说明干活，交回有界回报。两条线程的每次工具调用在工具执行之前都经过 PreToolUse：子智能体内的嵌套派发、git commit --no-verify、会打印密钥值的调用、直接改写 HANDOFF.md，以及 researcher 或 retriever 子智能体改动、移动或删除已有文件的操作都被拒绝，researcher 与 retriever 子智能体读文件、跑命令与新建文件都放行；在标成生产的仓库里执行 gh pr merge，要等用户当场同意才执行；5 小时用量到 95% 及以上时，PreToolUse 里的限额暂停把两条线程的每次调用挂起到重置，每过 50 分钟拒绝一次被挂起的调用，线程随即发出暂停调用（: 限额暂停）并再被挂起，过了重置时间才放行；主线程里，用户本人在用量到 95% 之后发出的输入与缓存保活的最后一次唤醒不被挂起；限额暂停的用量取自本地文件，由状态栏包装把 Claude Code 传给状态栏的 rate_limits 记进这个文件；拒绝理由回到发起调用的线程，线程换一种做法；放行的调用交给工具执行。工具执行之后，PostToolUse 在改了规则文件时把规则文件提醒作为附加上下文送回发起调用的线程，在进入新工作树时把主检出目录中的 CLAUDE.md、node_modules 与 .env* 软链进这个工作树，不回话。主线程想结束这一轮时经过 Stop 钩子，都放行则这一轮结束，其中两个是同步闸门。上下文水位闸门过 35% 时每个会话提醒一次并放行，没有会话暂存目录时则每轮提醒，过 40% 拦一次，没有会话暂存目录时则每轮都拦，此后以上次拦截时的水位为基准，每再涨 5 个百分点就再拦一次；回复出口在回复末句是提议问句时拦一次，仅 zh/ 副本的安装里，较长的回复主要不是中文时也拦一次。这两个闸门拦下都回到主线程。被回复出口拦下，主线程要么直接把提议的那一步做掉，要么在确实需要用户拍板时按背景、各选项的后果与推荐的格式重新提问，因语言被拦时用中文重写。被水位闸门第一次拦下，已有上下文能做完的收尾就做完，接下来是新的大块工作时运行 handoff 技能，由 researcher 子智能体写出 HANDOFF.new.md，再由 finalize.sh 落位成交接文件，并提示用户换新会话；此后每次再被拦都立即生成交接文件。新会话读交接文件接着做。两个同步闸门都不会拦刚被自己拦下而续跑的那一轮，所以一次停止尝试最多被拦一次，这一轮再想停就放行；水位闸门在之后的轮次里仍会随用量上涨再拦。第三个 Stop 钩子缓存保活不拦停：它在这一轮结束后于后台计时，主线程上下文达到 150,000 词元且 50 分钟里没有新的一轮时，唤醒主线程只回一个句点，用户离开期间一小时的提示词缓存因此不过期；唤醒之前先探测 API，连不上就每 30 秒再探，到这一轮结束后 57 分钟仍连不上就放弃，因为再唤醒已来不及在缓存过期前续上。每次唤醒后照常重新计时，直到距用户本人最后一条消息满 8 小时；到上限前的最后一次唤醒，还有工作要接着做就让主线程用 handoff 技能写交接，否则只回一个句点。">
 </picture>
 
+## 各类派发跑在哪个模型上
+
+编排手册 §2 要求主线程每次派发都指定模型，`agents/` 里的定义只设推理强度。
+
+| 派发 | 模型 | 推理强度 | 条件 |
+|---|---|---|---|
+| 开放式的全仓定位 | Explore，跑在 haiku | 本仓库未设定 | 总是 |
+| 机械批量活：找文件、跑脚本、扫描 | haiku，分头并行 | 未设定，跟随会话的推理强度（[ADR 0008](../docs/zh/adr/0008-subagent-effort-per-kind-of-dispatch.md)） | 总是 |
+| `implementer` | haiku | `medium` | 改动行为的对错全部由已有测试或派发说明列出的验收用例（输入、期望输出与边界）判定 |
+| `implementer` | opus | `medium` | 其余所有实现，包括有任何一处要靠子智能体自写的测试来判定对错 |
+| `retriever` | haiku | `medium` | 派发说明把查找限定在本地文件、会话记录或其点名的单个网页（不是 PDF），并要子智能体在答案不在其中时回报、不外追链接 |
+| `retriever` | opus | `medium` | 其余所有查找，以及 haiku 回报在限定范围内查不到的查找 |
+| `researcher` | opus | `high` | 总是 |
+
+推理强度来自 [ADR 0008](../docs/zh/adr/0008-subagent-effort-per-kind-of-dispatch.md)。`implementer` 的划分有测量依据：在 9 份真实实现派发说明上，haiku 的 `medium` 档与 opus 的检查项满足比例配对差不超过 5 个百分点，子智能体按标价花费是 opus 的 0.16（[ADR 0021](../docs/zh/adr/0021-implementer-runs-on-haiku-when-tests-decide-every-change.md)）。`retriever` 的划分是判断，[ADR 0022](../docs/zh/adr/0022-retriever-runs-on-haiku-when-the-brief-limits-it-to-local-files-or-one-named-page.md) 记明它没有满足这一标准：在 6 份检索派发说明上，haiku 没有一档能证明差距不超过 5 个百分点；但唯一把 haiku 与 opus 区分开的失手方式，即遇到 403、404 或读不了的 PDF 就停手，在限定于文件或点名的单个网页的查找里预计不会出现，haiku 回报查不到时这次查找改派 opus。这类派发说明有两份，按第二轮盲审修订后的检查项，opus 与 haiku 的 `medium`、`high`、`xhigh` 每次运行都通过，haiku 的子智能体花费是 opus 的 0.21。
+
 ## 测量了什么
 
 除回复出口回放外，下面测量表里的每项结果都能在仓库根目录用本仓库里的命令复跑；回复出口回放读取的会话记录与标注放在私有数据目录里，只有我能复跑。其中静态上下文测量要用你自己的凭据调用 Claude Code，其余几项不调用模型。[docs/zh/evaluation.md](../docs/zh/evaluation.md) 说明每项测量的方法与局限。
@@ -32,7 +48,7 @@
 
 | 实验 | 要回答的问题 | 状态 |
 |---|---|---|
-| [推理强度对比](../eval/effort-sweep/README.md) | 子智能体在推理强度 `medium` 与 `high` 下、以及换用 Haiku 5.5 代替 Opus 5.5 时，质量与花费相比如何？ | 已跑完：实现与检索降到 `medium` 测不出损失，词元约为一半，审查判断类没有定论，据此作出的决策记在 [ADR 0008](../docs/zh/adr/0008-subagent-effort-per-kind-of-dispatch.md)。第二轮换用 Haiku 5.5：实现类在 `medium` 的 9 个用例上检查项满足比例没有测出超过 5 个百分点的损失，子智能体按标价花费是 Opus 的 0.16，检索类没有一档能证明差距不超过 5 个百分点，据此定下的派发规则记在 [ADR 0021](../docs/zh/adr/0021-implementer-runs-on-haiku-when-tests-decide-every-change.md) |
+| [推理强度对比](../eval/effort-sweep/README.md) | 子智能体在推理强度 `medium` 与 `high` 下、以及换用 Haiku 5.5 代替 Opus 5.5 时，质量与花费相比如何？ | 分两轮跑完；ADR 0008、0021 与 0022 列为待做的后续都没有排期。2026 年 9 月在 Opus 5.5 上：实现与检索降到 `medium` 测不出损失，词元约为一半，审查判断类没有定论，决策记在 [ADR 0008](../docs/zh/adr/0008-subagent-effort-per-kind-of-dispatch.md)。2026 年 10 月在 15 份派发说明上比 Haiku 5.5 与 Opus 5.5：实现类在 `medium` 的检查项差距不超过 5 个百分点，子智能体花费是 Opus 的 0.16（[ADR 0021](../docs/zh/adr/0021-implementer-runs-on-haiku-when-tests-decide-every-change.md)）；检索类没有一档过关，派发说明加来源清单后在检查项冻结的确认轮上也没过关，只有限定在本地文件或点名的单个网页的查找凭判断改派 Haiku（[ADR 0022](../docs/zh/adr/0022-retriever-runs-on-haiku-when-the-brief-limits-it-to-local-files-or-one-named-page.md)）。上一节列出由此定下的派发 |
 | [漏拦请示](../eval/rules-missed-asks/README.md) | 编排手册里的请示判据能否减少回复出口漏掉的过度请示？ | 跑过之后已搁置，因为得分测不到这条规则 |
 | [请示判断探针](../eval/ask-or-act/README.md) | 现行手册能否让模型该问时问、问了也多余时直接做？ | 做过两次试跑后停止，因为回放读到的是运行回放时的文件而不是会话当时的，测不到规则 |
 | [拦截后跟进](../eval/gate-followthrough/README.md) | 回复出口拦下一条本该请示的回复之后，模型会不会照样去做那一步？ | 已设计、未运行 |
@@ -66,7 +82,7 @@
 | `orchestrator-playbook.md` | 主线程作为编排者的规则：委派什么、怎样写子智能体派发说明、怎样交接长任务、交付闸门、git 约定 |
 | `hooks/` | 在 `settings.json` 中注册的钩子，均为 `.sh` 脚本，每个钩子都从标准输入读取钩子 JSON；另有状态栏包装 `statusline-tee.sh`，由 `settings.json` 设为 `statusLine` 命令，从标准输入读取状态栏 JSON |
 | `hooks/tests/` | 覆盖 `hooks/` 下全部十五个脚本的回归测试 |
-| `agents/` | 三个子智能体的定义，各自在开头的配置字段里设定推理强度：`researcher`（强度 `high`）接需要判断的只读审查、诊断、调研与草拟，`retriever`（强度 `medium`）接只读检索与抽取，`implementer`（强度 `medium`）接设计决定已由派发说明定死的实现，改动行为的对错全部由已有测试或派发说明列出的验收用例判定时，主线程把它派到 haiku，其余情况派到 opus，包括有任何一处要子智能体自写测试来定对错（见 [ADR 0021](../docs/zh/adr/0021-implementer-runs-on-haiku-when-tests-decide-every-change.md)）。`researcher` 与 `retriever` 只在派发说明给定的路径或系统临时目录下新建文件，这条限制来自子智能体定义里的指令；只读守卫钩子强制执行的只是不改已有文件。环境变量 `CLAUDE_CODE_EFFORT_LEVEL` 一旦设置，就会盖过这三个定义里的推理强度 |
+| `agents/` | 三个子智能体的定义，各自在开头的配置字段里设定推理强度：`researcher`（强度 `high`）接需要判断的只读审查、诊断、调研与草拟，`retriever`（强度 `medium`）接只读检索与抽取，派发说明把查找限定在本地文件、会话记录或其点名的单个网页时主线程把它派到 haiku，其余派到 opus（见 [ADR 0022](../docs/zh/adr/0022-retriever-runs-on-haiku-when-the-brief-limits-it-to-local-files-or-one-named-page.md)），`implementer`（强度 `medium`）接设计决定已由派发说明定死的实现，改动行为的对错全部由已有测试或派发说明列出的验收用例判定时，主线程把它派到 haiku，其余情况派到 opus，包括有任何一处要子智能体自写测试来定对错（见 [ADR 0021](../docs/zh/adr/0021-implementer-runs-on-haiku-when-tests-decide-every-change.md)）。`researcher` 与 `retriever` 只在派发说明给定的路径或系统临时目录下新建文件，这条限制来自子智能体定义里的指令；只读守卫钩子强制执行的只是不改已有文件。环境变量 `CLAUDE_CODE_EFFORT_LEVEL` 一旦设置，就会盖过这三个定义里的推理强度 |
 | `skills/` | 为本框架编写的技能，由 Claude Code 按需加载。`handoff` 与 `feature-sharding` 两个技能的辅助脚本及其 pytest 测试分别放在 `skills/handoff/scripts/` 与 `skills/feature-sharding/scripts/` |
 | `settings.example.json` | 注册全部钩子的 `hooks` 配置块，路径位于 `$HOME/.claude` 之下；一条运行 `statusline-tee.sh`、不带被包装命令的 `statusLine` 条目，只记录用量、不显示状态栏；以及拒绝 `AskUserQuestion` 的 `permissions.deny` 列表 |
 
@@ -179,7 +195,8 @@ bash scripts/ci-local.sh
 | [ADR 0018：水位提醒不再拦着新工作](../docs/zh/adr/0018-the-watermark-reminder-does-not-hold-back-new-work.md) | 提醒线与硬线之间为什么照常开工 |
 | [ADR 0019：保活唤醒前先探测网络，最后一次唤醒在还有工作时写交接](../docs/zh/adr/0019-keepalive-probes-the-network-before-waking-and-hands-off-at-its-last-wake-up.md) | 网络一直不通时保活为什么在一轮结束后 57 分钟放弃，最后一次唤醒何时写交接 |
 | [ADR 0020：5 小时用量到 95% 时挂起工具调用，每 50 分钟保活一次](../docs/zh/adr/0020-tool-calls-are-held-at-95-percent-of-the-five-hour-limit.md) | 工具调用怎样等到用量重置，用量从哪里读，谁的调用放行 |
-| [ADR 0021：改动对错全由既有测试或写定的验收用例判定时，`implementer` 派到 Haiku](../docs/zh/adr/0021-implementer-runs-on-haiku-when-tests-decide-every-change.md) | 改动行为的对错全部由已有测试或派发说明里的验收用例判定时，`implementer` 为什么派到 Haiku 5.5 的 `medium`，`retriever` 为什么留在 Opus |
+| [ADR 0021：改动对错全由既有测试或写定的验收用例判定时，`implementer` 派到 Haiku](../docs/zh/adr/0021-implementer-runs-on-haiku-when-tests-decide-every-change.md) | 改动行为的对错全部由已有测试或派发说明里的验收用例判定时，`implementer` 为什么派到 Haiku 5.5 的 `medium`，`retriever` 为什么按胜任规则留在 Opus（已由 ADR 0022 修订） |
+| [ADR 0022：派发说明把查找限定在本地文件或点名的单个网页时，`retriever` 派到 Haiku](../docs/zh/adr/0022-retriever-runs-on-haiku-when-the-brief-limits-it-to-local-files-or-one-named-page.md) | 限定在本地文件、会话记录或点名单个网页的查找为什么在未满足胜任规则时派到 Haiku 5.5，其余查找为什么留在 Opus |
 | [评测：方法与局限](../docs/zh/evaluation.md) | 本框架主张什么、不主张什么，以及受控实验要花多少 |
 | [静态上下文测量](../eval/static-context/README.md) | 怎样运行这项测量，每组配置安装了什么 |
 | [钩子变异测试](../eval/hook-mutations/README.md) | 怎样用植入的缺陷衡量钩子测试，以及留出集 |
