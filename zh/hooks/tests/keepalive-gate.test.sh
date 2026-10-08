@@ -200,10 +200,11 @@ printf '%s\n' '{"type":"user","message":{"role":"user","content":"在吗"}}' >"$
 report allow "$(PROBE="file://$DOWN" T="$t" verdict "$(payload "$t")" 'sleep 1; cat "$TMP/back.jsonl" >>"$T"')" "重试期间用户回来了，不唤醒"
 t=$(mk "net2.jsonl" user:0 asst:200000)
 report allow "$(SL=2 DL=1 verdict "$(payload "$t")")" "醒来已过截止（如合盖睡眠），不唤醒"
-# 本地 HTTP 服务：绑定成功后把端口写进文件，不从输出里解析（CI 的 macOS 上解析 http.server 的输出等不到端口）
+# 本地 HTTP 服务，绑定后把端口写进文件。用 socketserver.TCPServer 而非 http.server.HTTPServer：后者绑定时
+# 调 socket.getfqdn() 做反向 DNS 查询，CI 的 macOS 机器上卡住超过 10 秒
 python3 -c '
-import http.server, sys
-s = http.server.HTTPServer(("127.0.0.1", 0), http.server.SimpleHTTPRequestHandler)
+import http.server, socketserver, sys
+s = socketserver.TCPServer(("127.0.0.1", 0), http.server.SimpleHTTPRequestHandler)
 open(sys.argv[1] + ".tmp", "w").write(str(s.server_port))
 __import__("os").replace(sys.argv[1] + ".tmp", sys.argv[1])
 s.serve_forever()' "$TMP/http.port" >"$TMP/http.log" 2>&1 &
