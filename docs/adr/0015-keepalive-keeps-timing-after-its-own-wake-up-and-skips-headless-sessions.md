@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. In effect since 6 October 2026. Supersedes the `stop_hook_active` condition of [ADR 0014](0014-idle-sessions-past-150k-keep-their-prompt-cache-warm-with-an-async-rewake.md), and extends its list of the user's own messages; the rest of ADR 0014 stands.
+Accepted. In effect since 6 October 2026. Supersedes the `stop_hook_active` condition of [ADR 0014](0014-idle-sessions-past-150k-keep-their-prompt-cache-warm-with-an-async-rewake.md), and extends its list of the user's own messages; the rest of ADR 0014 stands. [ADR 0019](0019-keepalive-probes-the-network-before-waking-and-hands-off-at-its-last-wake-up.md) extends it with the network probe and the handoff on the last wake-up.
 
 ## Context
 

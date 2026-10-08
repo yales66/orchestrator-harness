@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. In effect since 4 October 2026. Supersedes the handoff format that ADR 0004 placed in section 3 of the playbook; the format now lives in the handoff skill, and the way ADR 0004 reads the watermark stands. Supersedes, in the row of ADR 0006 on a standing or conditional authorisation, the rule that an authorisation meant to carry across sessions goes into both project memory and the handoff file; the rest of ADR 0006 stands.
+Accepted. In effect since 4 October 2026. Supersedes the handoff format that ADR 0004 placed in section 3 of the playbook; the format now lives in the handoff skill, and the way ADR 0004 reads the watermark stands. Supersedes, in the row of ADR 0006 on a standing or conditional authorisation, the rule that an authorisation meant to carry across sessions goes into both project memory and the handoff file; the rest of ADR 0006 stands. [ADR 0019](0019-keepalive-probes-the-network-before-waking-and-hands-off-at-its-last-wake-up.md) adds one exception to step 0: the keepalive's last wake-up that judges a handoff needed skips the check.
 
 ## Context
 

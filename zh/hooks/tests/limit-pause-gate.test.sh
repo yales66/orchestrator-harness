@@ -24,6 +24,7 @@ json.dump(d, open(sys.argv[1], "w"))' "$RL" "$@"
 #   notify 后台通知开启的回合        qnotify 回合中途插进来的后台通知
 #   peer   子智能体回报              wake    句点保活唤醒       final  最后一次保活唤醒
 #   tool   只含工具结果的用户角色行  meta    isMeta 用户角色行（Stop 钩子拦截反馈）
+#   launch 后台派出子智能体 a_old 的工具结果（主 transcript 里出现它的编号）
 TX="$TMP/main.jsonl"
 tx() {
   python3 - "$TX" "$@" <<'PY'
@@ -52,6 +53,7 @@ for e in events:
     elif k == "qnotify": queued("<task-notification><task-id>b2</task-id></task-notification>", "task-notification")
     elif k == "tool":    user([{"type": "tool_result", "tool_use_id": "t", "content": "ok"}], None)
     elif k == "meta":    user("Stop hook feedback:\n回复以提议问句收尾。", None, isMeta=True)
+    elif k == "launch":  user([{"type": "tool_result", "tool_use_id": "t", "content": "Async agent launched successfully. agentId: a_old"}], None)
     lines.append({"type": "assistant", "timestamp": ts(ago), "message": {"role": "assistant", "content": []}})
 with open(out, "w") as f:
     for d in lines: f.write(json.dumps(d, ensure_ascii=False) + "\n")
@@ -153,6 +155,9 @@ deny|句点保活唤醒的回合|100||human:200 wake:10 tool:5
 allow|最后一次保活唤醒的回合（写交接）|100||human:200 final:10 tool:5
 allow|Stop 钩子拦截反馈（isMeta）不改变回合归属|100||human:10 tool:8 meta:5 tool:3
 deny|子智能体内一律照常拦|100|a_01|human:10 tool:5
+allow|最后一次保活那一轮新派的子智能体（写交接）|100|a_new|human:200 final:10 tool:5
+deny|最后一次保活之前就在跑的后台子智能体|100|a_old|human:200 launch:100 final:10 tool:5
+deny|句点保活那一轮派的子智能体|100|a_new|human:200 wake:10 tool:5
 TABLE
 rl 97 7200; tx human:10 tool:5
 report deny "$(verdict)" "不知道何时越过 95%：本人回合也照常拦"

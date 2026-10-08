@@ -22,12 +22,17 @@
 #      origin.kind 为 human 才是用户本人；后台通知、子智能体回报、保活唤醒各有别的 kind。只认最近一条：
 #      本人回合中途插进通知之后，之后的调用照常挂起，不能借本人开的回合跑起自动任务。
 #      越过 95% 的时刻取 statusline-tee.sh 记的 pause_since；没有就不放行。
-#      越过之前就开始的回合（包括用户让它全自动跑的）照常挂起；子智能体一律照常挂起。
-#   3. 睡到重置，最多睡 LIMIT_PAUSE_MAX_SLEEP 秒（默认 3000，只给测试改短），每 3 秒看一次。主线程挂起
+#      越过之前就开始的回合（包括用户让它全自动跑的）照常挂起。
+#   3. 子智能体（stdin 带 agent_id，transcript_path 仍是主会话的）：主线程最近一条输入是最后一次保活唤醒，
+#      且主 transcript 在那次唤醒之前没出现过它的编号，即它是交接那一轮新派的（handoff 技能派 researcher
+#      起草交接），放行，否则交接卡到重置。更早后台派出的子智能体，派出时编号已写进主 transcript，照常
+#      挂起；同步派出的子智能体跑完才写编号，但它不跨回合，正在跑的必是这一轮派的。其余子智能体照常挂起，
+#      包括用户越过 95% 后的回合里派的。
+#   4. 睡到重置，最多睡 LIMIT_PAUSE_MAX_SLEEP 秒（默认 3000，只给测试改短），每 3 秒看一次。主线程挂起
 #      期间用户发来消息（transcript 多出内容不像通知的 enqueue 行）就拦下本次调用并结束挂起：
 #      排队的消息要等工具调用返回才送达，不结束就要等满一轮；要模型先处理用户消息、处理完就停。
-#   4. 醒来已过重置时间：放行。
-#   5. 否则拦下这次调用，要模型只调用 Bash 执行 `: 限额暂停`：这次模型请求就是保活，只读缓存、
+#   5. 醒来已过重置时间：放行。
+#   6. 否则拦下这次调用，要模型只调用 Bash 执行 `: 限额暂停`：这次模型请求就是保活，只读缓存、
 #      输出极小；该调用又进本钩子挂起。睡 3000 秒是为了让保活请求落在提示缓存 1 小时有效期内。
 #      不让模型原样重发被拦的调用，因为那要把整份工具输入（如 Write 的全文）再生成一遍。
 # 离重置不到 50 分钟时只睡不保活：缓存撑得到重置。
@@ -52,11 +57,12 @@ PAUSE_CMD = ": 限额暂停"
 try:
     p = json.loads(sys.stdin.buffer.read().decode("utf-8"))
     is_pause = p.get("tool_name") == "Bash" and str((p.get("tool_input") or {}).get("command") or "").strip() == PAUSE_CMD
-    tp = "" if str(p.get("agent_id") or "").strip() else str(p.get("transcript_path") or "")
+    agent = str(p.get("agent_id") or "").strip()
+    tp = str(p.get("transcript_path") or "")
 except Exception:
-    is_pause, tp = False, ""
+    is_pause, agent, tp = False, "", ""
 if not os.path.isfile(tp):
-    tp = ""                    # 子智能体内或拿不到 transcript：不看用户输入
+    tp = ""                    # 拿不到 transcript：不看用户输入
 
 def deny(reason):
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
@@ -69,11 +75,15 @@ def epoch(ts):
     except Exception:
         return None
 
-# 主线程最近一条输入：(origin.kind, 时间, 文字)
+# 主线程最近一条输入：(origin.kind, 时间, 文字, 它之前的 transcript 是否出现过 agent 编号)
 def last_input():
     last = None
+    seen = False               # 截至当前行，主 transcript 是否出现过本子智能体的编号
     with open(tp, encoding="utf-8") as f:
         for line in f:
+            before = seen
+            if agent and agent in line:
+                seen = True
             try:
                 o = json.loads(line)
             except Exception:
@@ -83,10 +93,10 @@ def last_input():
             if o.get("type") == "user" and isinstance(o.get("origin"), dict):
                 c = (o.get("message") or {}).get("content")
                 txt = c if isinstance(c, str) else json.dumps(c, ensure_ascii=False)
-                last = (o["origin"].get("kind"), epoch(o.get("timestamp")), txt)
+                last = (o["origin"].get("kind"), epoch(o.get("timestamp")), txt, before)
             elif o.get("type") == "attachment" and (o.get("attachment") or {}).get("type") == "queued_command":
                 a = o["attachment"]
-                last = ((a.get("origin") or {}).get("kind"), epoch(o.get("timestamp")), str(a.get("prompt") or ""))
+                last = ((a.get("origin") or {}).get("kind"), epoch(o.get("timestamp")), str(a.get("prompt") or ""), before)
     return last
 
 # 挂起开始后 transcript 多出用户本人排队的消息
@@ -143,11 +153,15 @@ except Exception:
     pass
 if tp:
     try:
-        kind, at, txt = last_input() or (None, None, "")
-        if (kind == "human" and since is not None and at is not None and at >= since) or \
-                ("[保活]" in txt and FINAL_MARK in txt):
+        kind, at, txt, spawned_before = last_input() or (None, None, "", False)
+        final = "[保活]" in txt and FINAL_MARK in txt
+        if agent:
+            if final and not spawned_before:
+                release()
+            tp = ""            # 子智能体挂起期间不看用户排队的消息：它们只送达主线程
+        elif final or (kind == "human" and since is not None and at is not None and at >= since):
             release()
-        offset = os.path.getsize(tp)
+        offset = os.path.getsize(tp) if tp else 0
     except Exception:
         tp = ""
 
