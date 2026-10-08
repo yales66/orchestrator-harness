@@ -32,7 +32,7 @@
 
 | 实验 | 要回答的问题 | 状态 |
 |---|---|---|
-| [推理强度对比](../eval/effort-sweep/README.md) | 子智能体在推理强度 `medium` 与 `high` 下、以及换用 Haiku 5.5 代替 Opus 5.5 时，质量与花费相比如何？ | 已跑完：实现与检索降到 `medium` 测不出损失，词元约为一半，审查判断类没有定论，据此作出的决策记在 [ADR 0008](../docs/zh/adr/0008-subagent-effort-per-kind-of-dispatch.md)。第二轮换用 Haiku 5.5：实现类在 `medium` 的 9 个用例上没有测出超过 5 个百分点的损失，按标价花费是 Opus 的 0.16，检索类没有一档能证明差距不超过 5 个百分点，据此定下的派发规则记在 [ADR 0021](../docs/zh/adr/0021-implementer-runs-on-haiku-when-tests-decide-every-change.md) |
+| [推理强度对比](../eval/effort-sweep/README.md) | 子智能体在推理强度 `medium` 与 `high` 下、以及换用 Haiku 5.5 代替 Opus 5.5 时，质量与花费相比如何？ | 已跑完：实现与检索降到 `medium` 测不出损失，词元约为一半，审查判断类没有定论，据此作出的决策记在 [ADR 0008](../docs/zh/adr/0008-subagent-effort-per-kind-of-dispatch.md)。第二轮换用 Haiku 5.5：实现类在 `medium` 的 9 个用例上检查项满足比例没有测出超过 5 个百分点的损失，子智能体按标价花费是 Opus 的 0.16，检索类没有一档能证明差距不超过 5 个百分点，据此定下的派发规则记在 [ADR 0021](../docs/zh/adr/0021-implementer-runs-on-haiku-when-tests-decide-every-change.md) |
 | [漏拦请示](../eval/rules-missed-asks/README.md) | 编排手册里的请示判据能否减少回复出口漏掉的过度请示？ | 跑过之后已搁置，因为得分测不到这条规则 |
 | [请示判断探针](../eval/ask-or-act/README.md) | 现行手册能否让模型该问时问、问了也多余时直接做？ | 做过两次试跑后停止，因为回放读到的是运行回放时的文件而不是会话当时的，测不到规则 |
 | [拦截后跟进](../eval/gate-followthrough/README.md) | 回复出口拦下一条本该请示的回复之后，模型会不会照样去做那一步？ | 已设计、未运行 |
