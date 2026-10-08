@@ -2,7 +2,7 @@
 
 ## 状态
 
-已采纳，自 2026 年 10 月 4 日起生效。扩展 [ADR 0007](0007-handoff-timing-weighs-switch-against-long-context.md)：ADR 0007 只在过硬线后才要求在当前会话做完的收尾，现在不论水位都在当前会话做完。ADR 0007 在新的大块工作之前的权衡，以及用户要结束会话或闸门第二次拦下时立即写交接的规定，仍然有效。50 分钟唤醒现改为在后台运行 `sleep 3000`，不再用 CronCreate 的一次性任务，因为 auto 模式分类器把 CronCreate 判为未经授权的持久化而拒绝（见 [ADR 0014](0014-idle-sessions-past-150k-keep-their-prompt-cache-warm-with-an-async-rewake.md)）。
+已采纳，自 2026 年 10 月 4 日起生效。扩展 [ADR 0007](0007-handoff-timing-weighs-switch-against-long-context.md)：ADR 0007 只在过硬线后才要求在当前会话做完的收尾，现在不论水位都在当前会话做完。ADR 0007 在新的大块工作之前的权衡，以及用户要结束会话或闸门第二次拦下时立即写交接的规定，仍然有效。50 分钟唤醒现改为在后台运行 `sleep 3000`，不再用 CronCreate 的一次性任务，因为 auto 模式分类器把 CronCreate 判为未经授权的持久化而拒绝（见 [ADR 0014](0014-idle-sessions-past-150k-keep-their-prompt-cache-warm-with-an-async-rewake.md)）。[ADR 0019](0019-keepalive-probes-the-network-before-waking-and-hands-off-at-its-last-wake-up.md) 加了一个例外：保活的最后一次唤醒判定要交接时，先写交接。
 
 ## 背景
 

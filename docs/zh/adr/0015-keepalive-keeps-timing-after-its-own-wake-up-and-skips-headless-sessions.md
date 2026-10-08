@@ -2,7 +2,7 @@
 
 ## 状态
 
-已采纳，自 2026 年 10 月 6 日起生效。取代 [ADR 0014](0014-idle-sessions-past-150k-keep-their-prompt-cache-warm-with-an-async-rewake.md) 中 `stop_hook_active` 那一条件，并扩充它对用户本人消息的界定；ADR 0014 其余内容不变。
+已采纳，自 2026 年 10 月 6 日起生效。取代 [ADR 0014](0014-idle-sessions-past-150k-keep-their-prompt-cache-warm-with-an-async-rewake.md) 中 `stop_hook_active` 那一条件，并扩充它对用户本人消息的界定；ADR 0014 其余内容不变。[ADR 0019](0019-keepalive-probes-the-network-before-waking-and-hands-off-at-its-last-wake-up.md) 对它有所扩充：加了网络探测与最后一次唤醒时的交接。
 
 ## 背景
 

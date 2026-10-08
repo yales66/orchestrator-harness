@@ -6,16 +6,18 @@ PASS=0; FAIL=0
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 WAKE_PROMPT='[保活] 只回复一个句点，不做别的。'
+HANDOFF_PROMPT='[保活] 用户已离开近 8 小时，这是最后一次保活。本会话还有要交给新会话接着做的事，就用 handoff 技能交接，走完该技能的全部步骤就结束；只剩提交、推送、开 PR、合并等收尾，或在等用户答复、答复后还有工作，也算要交接，本回合不做这些收尾，也不重新提问。任务已做完，或剩下的只有用户本人能做、做完后不用会话接着做的事（如人工登录、人工审核），或已有的交接或计划文件已写全剩余工作且之后没有新进展，就只回一个句点。不做别的。'
 # 唤醒提示进 transcript 时的样子（Claude Code 包成后台通知）
-REWAKE="<task-notification>
-<summary>Stop hook feedback</summary>
-</task-notification>
-<system-reminder>
-Stop hook blocking error from command \"Stop\": $WAKE_PROMPT
-</system-reminder>"
+rewake_of() { printf '<task-notification>\n<summary>Stop hook feedback</summary>\n</task-notification>\n<system-reminder>\nStop hook blocking error from command "Stop": %s\n</system-reminder>' "$1"; }
+REWAKE=$(rewake_of "$WAKE_PROMPT")
+REWAKE_HO=$(rewake_of "$HANDOFF_PROMPT")
+# 探测地址：file:// 指向的文件存在就算连得上，测试里用它模拟网络通断
+UP="$TMP/up"; touch "$UP"
+DOWN="$TMP/down"
 
 # mk <文件名> <事件...> —— 按事件顺序造 transcript，回传路径。事件：
 #   user:<几小时前>      用户本人消息        rewake:<几小时前>  保活唤醒进 transcript 的消息
+#   rewakeho:<几小时前>  最后一次保活（视情况写交接）的唤醒消息
 #   agentmsg:<几小时前>  子智能体回报        notify:<几小时前>  后台通知
 #   peer:<几小时前>      另一会话发来的消息  meta:<几小时前>    isMeta 的用户角色消息
 #   toolres              一条只含工具结果的用户角色消息
@@ -29,7 +31,7 @@ Stop hook blocking error from command \"Stop\": $WAKE_PROMPT
 #   summary              Stop 之后 Claude Code 自己写的 stop_hook_summary 与 turn_duration
 mk() {
   local f="$TMP/$1"; shift
-  REWAKE="$REWAKE" python3 - "$f" "$@" <<'PY'
+  REWAKE="$REWAKE" REWAKE_HO="$REWAKE_HO" python3 - "$f" "$@" <<'PY'
 import json, os, sys, time
 from datetime import datetime, timezone
 out, events = sys.argv[1], sys.argv[2:]
@@ -55,6 +57,7 @@ for e in events:
     k, _, v = e.partition(":")
     if k == "user":     user("帮我看看这个", v)
     elif k == "rewake": user(os.environ["REWAKE"], v)
+    elif k == "rewakeho": user(os.environ["REWAKE_HO"], v)
     elif k == "agentmsg": user('<agent-message from="worker">做完了</agent-message>', v)
     elif k == "notify": user("<task-notification><task-id>b1</task-id></task-notification>", v)
     elif k == "peer":   user("Another Claude session sent a message: hi", v)
@@ -89,21 +92,25 @@ PY
 # payload <transcript> [额外 JSON 字段]
 payload() { printf '{"hook_event_name":"Stop","transcript_path":"%s"%s}' "$1" "${2:+,$2}"; }
 
-# verdict <输入JSON> [钩子睡眠期间对 $T 做的动作] —— 归成 allow|wake|其他。
-# allow ＝退出 0 且无任何输出；wake ＝退出 2、stdout 为空、stderr 恰为唤醒提示。
-# 钩子睡 1 秒（KEEPALIVE_SLEEP=1），动作在钩子起跑 0.5 秒后执行。入口取 $EP，缺省为交互终端的 cli。
+# verdict <输入JSON> [钩子睡眠期间对 $T 做的动作] —— 归成 allow|wake|handoff|其他。
+# allow ＝退出 0 且无任何输出；wake／handoff ＝退出 2、stdout 为空、stderr 恰为句点／交接提示。
+# 钩子睡 1 秒（KEEPALIVE_SLEEP=1），起跑 3 秒后为唤醒截止（KEEPALIVE_DEADLINE，可由 $DL 改），
+# 连不上时每 0.2 秒再探；探测地址取 $PROBE，缺省连得上。动作在钩子起跑 0.5 秒后执行。
+# 入口取 $EP，缺省为交互终端的 cli。
 verdict() {
   local p="$1" act="$2" rc
   if [ ! -f "$HOOK" ]; then echo "脚本不存在"; return; fi
   if [ -n "$act" ]; then (sleep 0.5; eval "$act") & fi
-  printf '%s' "$p" | CLAUDE_CODE_ENTRYPOINT="${EP:-cli}" KEEPALIVE_SLEEP=1 bash "$HOOK" >"$TMP/out" 2>"$TMP/err"
+  printf '%s' "$p" | CLAUDE_CODE_ENTRYPOINT="${EP:-cli}" KEEPALIVE_SLEEP="${SL:-1}" KEEPALIVE_DEADLINE="${DL:-3}" \
+    KEEPALIVE_RETRY=0.2 KEEPALIVE_PROBE_URL="${PROBE:-file://$UP}" bash "$HOOK" >"$TMP/out" 2>"$TMP/err"
   rc=$?
   wait
-  WAKE_PROMPT="$WAKE_PROMPT" python3 - "$rc" "$TMP/out" "$TMP/err" <<'PY'
+  WAKE_PROMPT="$WAKE_PROMPT" HANDOFF_PROMPT="$HANDOFF_PROMPT" python3 - "$rc" "$TMP/out" "$TMP/err" <<'PY'
 import os, sys
 rc, out, err = sys.argv[1], open(sys.argv[2], "rb").read(), open(sys.argv[3], "rb").read()
 if rc == "0" and not out and not err: print("allow")
 elif rc == "2" and not out and err == os.environ["WAKE_PROMPT"].encode("utf-8"): print("wake")
+elif rc == "2" and not out and err == os.environ["HANDOFF_PROMPT"].encode("utf-8"): print("handoff")
 else: print("退出%s stdout=%r stderr=%r" % (rc, out[:60], err[:60]))
 PY
 }
@@ -167,6 +174,48 @@ wake|起跑后才落盘、时间戳早于起跑的 assistant 行仍唤醒|printf
 wake|起跑后才落盘、时间戳早于起跑的 user 行仍唤醒|printf '%s\n' '{"type":"user","timestamp":"2020-01-01T00:00:00.000Z","message":{"role":"user","content":"在吗"}}' >>"$T"
 allow|时间戳晚于起跑的 assistant 行不唤醒|printf '%s\n' '{"type":"assistant","timestamp":"2099-01-01T00:00:00.000Z","message":{"role":"assistant","content":[]}}' >>"$T"
 TABLE
+
+echo "── 最后一次保活写交接 ──"
+# 这一组睡 3 秒、截止 5 秒：mk 的时间戳截到整秒，睡眠周期要比这 1 秒抖动长得多才分得清边界
+while IFS='|' read -r want desc events; do
+  [ -z "$want" ] && continue
+  # shellcheck disable=SC2086
+  t=$(mk "ho$((PASS+FAIL)).jsonl" $events)
+  report "$want" "$(SL=3 DL=5 verdict "$(payload "$t")")" "$desc"
+done <<'TABLE'
+handoff|离 8 小时只剩 4.5 秒，下一次唤醒会越过上限，这次改为写交接|user:7.99875 asst:150000
+wake|下一次唤醒仍在 8 小时内，照常回句点|user:7.99 asst:150000
+allow|用户最后一条消息之后已发过最后一次保活唤醒，不再计时|user:7.99 asst:150000 rewakeho:0 asst:151000
+wake|最后一次保活唤醒在用户最后一条消息之前，照常计时|rewakeho:3 user:1 asst:150000
+TABLE
+
+echo "── 唤醒前探测网络，只在缓存期限内重试 ──"
+t=$(mk "net.jsonl" user:0 asst:200000)
+report allow "$(PROBE="file://$DOWN" verdict "$(payload "$t")")" "一直连不上，到截止不唤醒"
+rm -f "$DOWN"
+report wake "$(PROBE="file://$DOWN" verdict "$(payload "$t")" "sleep 1; touch '$DOWN'")" "截止前网络恢复，恢复后唤醒"
+rm -f "$DOWN"
+printf '%s\n' '{"type":"user","message":{"role":"user","content":"在吗"}}' >"$TMP/back.jsonl"
+# shellcheck disable=SC2016  # 动作由 verdict 在子 shell 里 eval，变量到那时才展开
+report allow "$(PROBE="file://$DOWN" T="$t" verdict "$(payload "$t")" 'sleep 1; cat "$TMP/back.jsonl" >>"$T"')" "重试期间用户回来了，不唤醒"
+t=$(mk "net2.jsonl" user:0 asst:200000)
+report allow "$(SL=2 DL=1 verdict "$(payload "$t")")" "醒来已过截止（如合盖睡眠），不唤醒"
+# 本地 HTTP 服务，绑定后把端口写进文件。用 socketserver.TCPServer 而非 http.server.HTTPServer：后者绑定时
+# 调 socket.getfqdn() 做反向 DNS 查询，CI 的 macOS 机器上卡住超过 10 秒
+python3 -c '
+import http.server, socketserver, sys
+s = socketserver.TCPServer(("127.0.0.1", 0), http.server.SimpleHTTPRequestHandler)
+open(sys.argv[1] + ".tmp", "w").write(str(s.server_address[1]))
+__import__("os").replace(sys.argv[1] + ".tmp", sys.argv[1])
+s.serve_forever()' "$TMP/http.port" >"$TMP/http.log" 2>&1 &
+HTTP_PID=$!
+trap 'kill $HTTP_PID 2>/dev/null; rm -rf "$TMP"' EXIT
+for _ in $(seq 50); do [ -s "$TMP/http.port" ] && break; sleep 0.2; done
+PORT=$(cat "$TMP/http.port" 2>/dev/null)
+[ -n "$PORT" ] || { echo "测试用 HTTP 服务 10 秒内没起来："; cat "$TMP/http.log"; exit 1; }
+report wake "$(PROBE="http://127.0.0.1:$PORT/no-such-path" verdict "$(payload "$t")")" "服务端回 404 也算连得上"
+kill $HTTP_PID 2>/dev/null; wait $HTTP_PID 2>/dev/null
+report allow "$(PROBE="http://127.0.0.1:$PORT/" verdict "$(payload "$t")")" "端口关着算连不上"
 
 echo "── 睡眠期间脚本被原地改写 ──"
 # bash 边读边执行脚本：睡眠期间原地改写钩子文件，醒来后不能从旧偏移读新内容报错，仍照常唤醒

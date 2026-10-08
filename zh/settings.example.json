@@ -82,6 +82,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/hooks/limit-pause-gate.sh",
+            "timeout": 3300
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -129,5 +139,9 @@
         ]
       }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash $HOME/.claude/hooks/statusline-tee.sh"
   }
 }
