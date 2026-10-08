@@ -203,7 +203,9 @@ report allow "$(SL=2 DL=1 verdict "$(payload "$t")")" "醒来已过截止（如�
 python3 -u -m http.server 0 --bind 127.0.0.1 >"$TMP/http.log" 2>&1 &
 HTTP_PID=$!
 trap 'kill $HTTP_PID 2>/dev/null; rm -rf "$TMP"' EXIT
-for _ in 1 2 3 4 5 6 7 8 9 10; do PORT=$(grep -o 'port [0-9]*' "$TMP/http.log" | grep -o '[0-9]*'); [ -n "$PORT" ] && break; sleep 0.2; done
+# 慢机器上 http.server 起来要好几秒（CI 的 macOS 跑满 2 秒还没打印端口），最多等 10 秒，等不到就报错
+for _ in $(seq 50); do PORT=$(grep -o 'port [0-9]*' "$TMP/http.log" | grep -o '[0-9]*'); [ -n "$PORT" ] && break; sleep 0.2; done
+[ -n "$PORT" ] || { echo "测试用 HTTP 服务 10 秒内没起来"; exit 1; }
 report wake "$(PROBE="http://127.0.0.1:$PORT/no-such-path" verdict "$(payload "$t")")" "服务端回 404 也算连得上"
 kill $HTTP_PID 2>/dev/null; wait $HTTP_PID 2>/dev/null
 report allow "$(PROBE="http://127.0.0.1:$PORT/" verdict "$(payload "$t")")" "端口关着算连不上"
