@@ -149,7 +149,7 @@ python3 -m pytest -p no:cacheprovider skills/handoff/scripts skills/feature-shar
 bash scripts/check-parity.sh
 ```
 
-持续集成在每次推送与拉取请求时运行。它在 Ubuntu 与 macOS 上运行两份副本的钩子测试，每份 723 个用例，用 pytest 运行两份副本的技能脚本测试，用 shellcheck 检查钩子、钩子测试、技能的 shell 脚本与仓库脚本，并运行中英文副本的一致性检查。推送前想在本机一次跑完这四项检查，可以在仓库根目录下运行下面的命令。它需要装有 pytest 的 `python3`，以及 `jq`、`git` 与 shellcheck，都在 `PATH` 上，并且只覆盖你本机的操作系统和用来运行它的那个 bash；在 Mac 上用 `/bin/bash scripts/ci-local.sh` 运行，就和持续集成用的 bash 3.2 一致。一致性检查只看已纳入 git 跟踪的文件，新建的文件先 `git add` 再运行：
+持续集成在每次推送与拉取请求时运行。它在 Ubuntu 与 macOS 上运行两份副本的钩子测试，每份 723 个用例，用 pytest 运行两份副本的技能脚本测试，用 shellcheck 检查钩子、钩子测试、技能的 shell 脚本与仓库脚本，运行中英文副本的一致性检查，并检查已跟踪的 Markdown 文件里没有作者本机的用户目录路径，因为评测说明汇总的是在私有工作上跑出的结果。推送前想在本机一次跑完这五项检查，可以在仓库根目录下运行下面的命令。它需要装有 pytest 的 `python3`，以及 `jq`、`git` 与 shellcheck，都在 `PATH` 上，并且只覆盖你本机的操作系统和用来运行它的那个 bash；在 Mac 上用 `/bin/bash scripts/ci-local.sh` 运行，就和持续集成用的 bash 3.2 一致。一致性检查只看已纳入 git 跟踪的文件，新建的文件先 `git add` 再运行：
 
 ```bash
 bash scripts/ci-local.sh

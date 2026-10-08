@@ -149,7 +149,7 @@ From the repository root, the check that `en/` and `zh/` hold matching copies ru
 bash scripts/check-parity.sh
 ```
 
-CI runs on every push and pull request. It runs the hook tests of both copies, 723 cases each, on Ubuntu and macOS, runs the skill script tests of both copies with pytest, runs shellcheck over the hooks, their tests, the skill shell scripts and the repository scripts, and runs the en/zh parity check. To run the same four checks locally before pushing, run the command below from the repository root. It needs `python3` with pytest installed, and `jq`, `git` and `shellcheck`, on `PATH`, and covers only your operating system and the bash you run it with; on a Mac, `/bin/bash scripts/ci-local.sh` matches the bash 3.2 that CI uses. The parity check sees only files git tracks, so `git add` new files before running it:
+CI runs on every push and pull request. It runs the hook tests of both copies, 723 cases each, on Ubuntu and macOS, runs the skill script tests of both copies with pytest, runs shellcheck over the hooks, their tests, the skill shell scripts and the repository scripts, runs the en/zh parity check, and checks that no tracked Markdown file names a home directory path on the author's machine, since the eval write-ups summarise runs on private work. To run the same five checks locally before pushing, run the command below from the repository root. It needs `python3` with pytest installed, and `jq`, `git` and `shellcheck`, on `PATH`, and covers only your operating system and the bash you run it with; on a Mac, `/bin/bash scripts/ci-local.sh` matches the bash 3.2 that CI uses. The parity check sees only files git tracks, so `git add` new files before running it:
 
 ```bash
 bash scripts/ci-local.sh

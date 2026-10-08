@@ -69,4 +69,11 @@ else
   status=1
 fi
 
+if "$BASH" scripts/check-public.sh; then
+  echo "ok    public"
+else
+  echo "FAIL  public"
+  status=1
+fi
+
 exit "$status"
