@@ -470,6 +470,84 @@ def original_status(repo: str) -> str:
     return hashlib.sha1(git(repo, "status", "--porcelain=v1", check=False).encode()).hexdigest()
 
 
+def nested_worktrees(ws: Path) -> list[Path]:
+    """The linked worktrees of the workspace's repository whose directories lie inside the workspace."""
+    root = Path(ws).resolve()
+    out = []
+    for line in git(ws, "worktree", "list", "--porcelain", check=False).splitlines():
+        if line.startswith("worktree "):
+            p = Path(line[len("worktree "):]).resolve()
+            if p != root and root in p.parents:
+                out.append(p)
+    return out
+
+
+def worktree_ignores(ws: Path) -> list[str]:
+    """Globs covering each linked worktree inside the workspace, which git status lists as one untracked directory."""
+    root = Path(ws).resolve()
+    globs = []
+    for p in nested_worktrees(ws):
+        rel = p.relative_to(root).as_posix()
+        globs += [rel, rel + "/", rel + "/**"]
+    return globs
+
+
+def worktree_changed(wt: Path, base: str) -> bool:
+    """Whether the worktree differs from `base`, in its working tree or in commits made on its branch."""
+    if dirty_manifest(wt):
+        return True
+    return subprocess.run(["git", "-C", str(wt), "diff", "--quiet", base, "HEAD"], capture_output=True).returncode != 0
+
+
+def grading_root(ws: Path, case: dict, before: dict[str, str]) -> Path:
+    """The directory an impl attempt is graded in: the workspace, or the one linked worktree inside it that holds
+    the attempt's work.
+
+    A brief can tell the agent to make its changes in a worktree of its own. The worktree is graded when the
+    workspace has no change inside the case's scope (the worktree directories themselves aside) and exactly one
+    linked worktree inside the workspace differs from the base commit.
+    """
+    ignores = setup_ignores(case) + worktree_ignores(ws)
+    scope, deny = case["scope"], case.get("scope_deny", [])
+    main_changed = [p for p in changed_since(ws, before) if not path_matches(p, ignores)
+                    and path_matches(p, scope) and not path_matches(p, deny)]
+    if main_changed:
+        return ws
+    changed = [p for p in nested_worktrees(ws) if worktree_changed(p, case["base"])]
+    if len(changed) != 1:
+        return ws
+    return ws / changed[0].relative_to(Path(ws).resolve())
+
+
+def soft_reset_to_base(root: Path, base: str) -> str | None:
+    """`git reset --soft <base>` in `root` when its HEAD is elsewhere; returns the HEAD it moved from, or None."""
+    head = git(root, "rev-parse", "HEAD").strip()
+    if head == git(root, "rev-parse", f"{base}^{{commit}}").strip():
+        return None
+    git(root, "reset", "--soft", base)
+    return head
+
+
+def grade_impl_attempt(case: dict, ws: Path, before: dict[str, str]) -> tuple[dict, str, str | None]:
+    """grade_impl in the attempt's grading root, with hidden.exclude applied; returns the grade, the root
+    relative to the workspace ("." for the workspace itself).
+
+    A worktree the attempt created starts clean, so it is graded against an empty manifest; the workspace is
+    graded with its linked worktree directories ignored. The grader sees only what git status lists, so when the
+    root's HEAD is not the base commit it is soft-reset to the base first: committed changes become staged ones
+    and are graded like uncommitted changes. The third value is the HEAD before that reset, or None.
+    """
+    root = grading_root(ws, case, before)
+    reset_from = soft_reset_to_base(root, case["base"])
+    if root == ws:
+        g = grade_impl({**case, "ignore": list(case.get("ignore", [])) + worktree_ignores(ws)}, ws, before)
+    else:
+        g = grade_impl(case, root, {})
+    apply_hidden_exclude(case, g["detail"])
+    g.update(impl_grade_from_detail(g["detail"]))
+    return g, root.relative_to(ws).as_posix() if root != ws else ".", reset_from
+
+
 def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
     effort, model = args.effort, getattr(args, "model", "opus")
     arm = effort if model == "opus" else f"{model}-{effort}"
@@ -559,8 +637,9 @@ def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
         uses = tool_uses(sub)
         report = final_report(sub)
         ignores = setup_ignores(case)
+        root_rel = reset_from = None
         if case["tier"] == "impl":
-            g = grade_impl(case, ws, before)
+            g, root_rel, reset_from = grade_impl_attempt(case, ws, before)
             changed = g["detail"]["changed"]
         else:
             changed = [p for p in changed_since(ws, before) if not path_matches(p, ignores)]
@@ -608,6 +687,8 @@ def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
                 "grade_detail": g["detail"], "changed": changed, "report_chars": len(report),
             },
         }
+        if root_rel is not None:
+            row["meta"].update(grading_root=root_rel, soft_reset_from=reset_from)
         append_jsonl(vdir / "results.jsonl", row)
         print(f"{case['id']} rep{rep} {arm}: pass={g['grade']['pass']} checks={g['grade']['checks']:.2f} "
               f"tokens={sum(usage.values())} tools={len(uses)}")
@@ -739,8 +820,8 @@ VITEST_SUMMARY = re.compile(r"^\s*Tests\s+(\d+ \w+(?: \| \d+ \w+)*) \(\d+\)")
 COUNT = re.compile(r"(\d+) (passed|failed|errors?)\b")
 
 
-def summary_counts(out: str) -> tuple[int, int] | None:
-    """(passed, passed + failed + errors) from the last pytest or vitest summary line in `out`; skipped is left out."""
+def summary_parts(out: str) -> dict | None:
+    """{"passed", "failed", "errors"} from the last pytest or vitest summary line in `out`, or None without one."""
     found = None
     for line in ANSI.sub("", out or "").splitlines():
         m = PYTEST_SUMMARY.match(line) or VITEST_SUMMARY.match(line)
@@ -748,25 +829,150 @@ def summary_counts(out: str) -> tuple[int, int] | None:
             found = m[1]
     if found is None:
         return None
-    passed = failed = 0
+    parts = {"passed": 0, "failed": 0, "errors": 0}
     for n, kind in COUNT.findall(found):
-        if kind == "passed":
-            passed += int(n)
+        parts["errors" if kind.startswith("error") else kind] += int(n)
+    return parts
+
+
+def summary_counts(out: str) -> tuple[int, int] | None:
+    """(passed, passed + failed + errors) from the last pytest or vitest summary line in `out`; skipped is left out."""
+    parts = summary_parts(out)
+    if parts is None:
+        return None
+    total = parts["passed"] + parts["failed"] + parts["errors"]
+    return (parts["passed"], total) if total else None
+
+
+PYTEST_FAILED = re.compile(r"^(?:FAILED|ERROR) (\S.*?)(?: - .*)?$")
+VITEST_FAILED = re.compile(r"^\s*(?:FAIL|×|✗)\s+(.*\S)\s*$")
+VITEST_PROJECT = re.compile(r"^\|[^|]+\|\s+")
+VITEST_DURATION = re.compile(r"\s+\d+(?:\.\d+)?m?s$")
+VITEST_ERRORS = re.compile(r"^\s*Errors\s+\d+ errors?\b")
+
+
+def failed_tests(out: str) -> list[str] | None:
+    """Ids of the failed tests a hidden command's output lists, in order and without repeats.
+
+    pytest ids come from the short test summary's FAILED and ERROR lines, relative to pytest's rootdir; vitest ids
+    are the `file > suite > test` lines marked FAIL, × or ✗, without the |project| prefix or trailing duration.
+    None when the output does not account for every failure its summary line counts: the tail kept by the grader
+    was cut before some of them, there is no summary line, or vitest reports errors raised outside any test.
+    """
+    text = ANSI.sub("", out or "")
+    parts = summary_parts(text)
+    if parts is None:
+        return None
+    ids = []
+    for line in text.splitlines():
+        if VITEST_ERRORS.match(line):
+            return None
+        m = PYTEST_FAILED.match(line)
+        if m:
+            tid = m[1]
         else:
-            failed += int(n)
-    return (passed, passed + failed) if passed + failed else None
+            m = VITEST_FAILED.match(line)
+            if not m or " > " not in m[1]:
+                continue
+            tid = VITEST_DURATION.sub("", VITEST_PROJECT.sub("", m[1]))
+        if tid not in ids:
+            ids.append(tid)
+    return None if len(ids) < parts["failed"] + parts["errors"] else ids
+
+
+def excluded_by(tid: str, exclude: list[str]) -> bool:
+    """pytest ids match an exclude entry in full; vitest ids (` > `-joined) match by prefix, since entries may be cut."""
+    return any(tid.startswith(e) if " > " in e else tid == e for e in exclude)
+
+
+HIDDEN_RESCORE_KEYS = ("ok_raw", "indeterminate", "excluded", "counts_after")
+
+
+def apply_hidden_exclude(case: dict, detail: dict) -> None:
+    """Rescore grade_detail's hidden runs in place: failures of the landed tests listed in hidden.exclude do not count.
+
+    A run cut off while collecting (0 passed and an error) cannot say how the landed tests fare: ok becomes None and
+    the run is marked indeterminate. A run whose output does not list every failure is marked indeterminate with
+    its ok kept. Otherwise the excluded failures are dropped, recorded in `excluded`, and leave the test count in
+    `counts_after`; when they were all the failures, ok becomes True. Runs that passed or timed out are left alone.
+    The ok the command itself gave is kept in `ok_raw`, so rescoring again follows the current exclude list.
+    """
+    exclude = list((case.get("hidden") or {}).get("exclude") or [])
+    runs = (detail or {}).get("hidden") or []
+    for h in runs:
+        raw_ok = h.get("ok_raw", h.get("ok"))
+        for k in HIDDEN_RESCORE_KEYS:
+            h.pop(k, None)
+        h["ok"] = raw_ok
+        if raw_ok or h.get("code") is None:
+            continue
+        parts = summary_parts(h.get("out", ""))
+        if parts is not None and parts["passed"] == 0 and parts["errors"]:
+            h.update(ok_raw=raw_ok, ok=None, indeterminate=True)
+            continue
+        ids = failed_tests(h.get("out", ""))
+        if ids is None:
+            h["indeterminate"] = True
+            continue
+        dropped = [t for t in ids if excluded_by(t, exclude)]
+        if not dropped:
+            continue
+        passed, total = summary_counts(h.get("out", ""))
+        h.update(ok_raw=raw_ok, excluded=dropped, counts_after=[passed, total - len(dropped)])
+        if len(dropped) == len(ids):
+            h["ok"] = True
+    if runs:
+        oks = [h["ok"] for h in runs]
+        detail["hidden_pass"] = False if False in oks else (None if None in oks else True)
 
 
 def hidden_tests(detail: dict) -> tuple[int, int] | None:
     """(passed, total) summed over the hidden commands whose output carries a test summary; None when none does.
 
-    A command that timed out (code None) counts as having no summary, whatever partial output it left.
+    A command that timed out (code None) counts as having no summary, whatever partial output it left; an
+    indeterminate run is left out, and a run with excluded failures counts by its `counts_after`.
     """
-    counts = [summary_counts(h.get("out", "")) for h in (detail or {}).get("hidden") or [] if h.get("code") is not None]
-    counts = [c for c in counts if c is not None]
+    counts = []
+    for h in (detail or {}).get("hidden") or []:
+        if h.get("code") is None or h.get("indeterminate"):
+            continue
+        c = tuple(h["counts_after"]) if h.get("counts_after") else summary_counts(h.get("out", ""))
+        if c is not None and c[1]:
+            counts.append(c)
     if not counts:
         return None
     return sum(p for p, _ in counts), sum(t for _, t in counts)
+
+
+def impl_grade_from_detail(detail: dict) -> dict:
+    """{"grade", "explanation"} of an impl attempt from its grade_detail, on grade_impl's terms.
+
+    The checks are changed, scope, each selfcheck and each hidden run; `checks` is the share that are ok, leaving
+    out those whose ok is None. `pass` needs a change inside scope, none outside it, and every selfcheck ok.
+    """
+    changed, outside = detail.get("changed") or [], detail.get("out_of_scope") or []
+    in_scope = [p for p in changed if p not in set(outside)]
+    checks = [("changed", bool(in_scope), f"{len(in_scope)} file(s) changed inside scope"),
+              ("scope", not outside, "outside scope: " + ", ".join(outside) if outside else "ok")]
+    runs = detail.get("selfcheck") or []
+    for i, r in enumerate(runs):
+        if r.get("code") is None and str(r.get("out", "")).startswith("no changed file matches"):
+            note = r["out"]
+        else:
+            note = f"exit {r.get('code')}{' (timeout)' if r.get('code') is None else ''}"
+        checks.append((f"selfcheck{i + 1}", r.get("ok"), note))
+    for i, h in enumerate(detail.get("hidden") or []):
+        note = f"exit {h.get('code')}"
+        if h.get("excluded"):
+            note += f", {len(h['excluded'])} excluded failure(s)"
+        if h.get("indeterminate"):
+            note += ", indeterminate"
+        checks.append((f"hidden{i + 1}", h.get("ok"), note))
+    counted = [ok for _, ok, _ in checks if ok is not None]
+    passed = bool(in_scope) and not outside and all(r.get("ok") for r in runs)
+    mark = lambda ok: "n/a" if ok is None else ("ok" if ok else "FAIL")
+    return {"grade": {"pass": int(passed), "checks": sum(bool(ok) for ok in counted) / len(counted)},
+            "explanation": {"pass": "; ".join(f"{cid}={mark(ok)} ({note})" for cid, ok, note in checks)}}
 
 
 def hidden_ratio(r: dict) -> float | None:
@@ -923,8 +1129,36 @@ def regrade_row(case: dict, raw: Path, row: dict, sources: dict) -> dict:
     return grade_text(case, answer, changed)
 
 
+def regrade_impl_row(case: dict, r: dict, counts: dict, arm: str, dry_run: bool, stamp: str) -> None:
+    """Rescore an ok impl row offline: apply the case's hidden.exclude to its recorded hidden runs and recompute
+    the grade from grade_detail; no command is run again. `counts` tallies rows, pass and checks changes, and
+    indeterminate hidden runs. A dry run prints the change and leaves the row as it was.
+    """
+    meta = r["meta"]
+    detail = json.loads(json.dumps(meta["grade_detail"]))
+    apply_hidden_exclude(case, detail)
+    g = impl_grade_from_detail(detail)
+    old, new = r["grade"], g["grade"]
+    counts["rows"] += 1
+    counts["pass"] += int(old["pass"]) != int(new["pass"])
+    counts["checks"] += old["checks"] != new["checks"]
+    counts["indeterminate"] += sum(bool(h.get("indeterminate")) for h in detail["hidden"])
+    if dry_run or old != new:
+        print(f"  {arm} {r['prompt_id']} rep{r['rep']}: pass {int(old['pass'])}->{int(new['pass'])} "
+              f"checks {old['checks']:.2f}->{new['checks']:.2f}")
+    if dry_run:
+        return
+    meta.setdefault("grade_original", old)
+    r["grade"], r["explanation"] = new, g["explanation"]
+    meta["grade_detail"] = detail
+    meta["regraded_at"] = stamp
+
+
 def cmd_regrade(args) -> int:
-    """Re-grade each ok text-tier row against the current cases.jsonl, rewriting results.jsonl in place."""
+    """Re-grade each ok row against the current cases.jsonl, rewriting results.jsonl in place.
+
+    Text-tier rows are graded again from raw/; impl rows that recorded hidden runs are rescored from grade_detail.
+    """
     from datetime import datetime, timezone
 
     cases = {c["id"]: c for c in load_cases(args.data / "cases.jsonl", include_excluded=True)}
@@ -936,9 +1170,15 @@ def cmd_regrade(args) -> int:
         rows = read_jsonl(path)
         sources = {"saved": 0, "rebuilt": 0, "missing": 0}
         done = pass_changed = checks_changed = no_case = no_raw = 0
+        impl = {"rows": 0, "pass": 0, "checks": 0, "indeterminate": 0}
+        stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
         for r in rows:
             meta = r.get("meta") or {}
-            if r.get("status") != "ok" or meta.get("tier") == "impl":
+            if r.get("status") != "ok":
+                continue
+            if meta.get("tier") == "impl":
+                if r["prompt_id"] in cases and (meta.get("grade_detail") or {}).get("hidden"):
+                    regrade_impl_row(cases[r["prompt_id"]], r, impl, name, args.dry_run, stamp)
                 continue
             raw = args.data / name / "raw" / f"{r['prompt_id']}_rep{r['rep']}"
             if r["prompt_id"] not in cases:
@@ -960,7 +1200,7 @@ def cmd_regrade(args) -> int:
             meta.setdefault("grade_original", old)
             r["grade"], r["explanation"] = new, g["explanation"]
             meta["grade_detail"] = g["detail"]
-            meta["regraded_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            meta["regraded_at"] = stamp
             r["meta"] = meta
         if not args.dry_run:
             tmp = path.with_name(path.name + ".tmp")
@@ -968,7 +1208,9 @@ def cmd_regrade(args) -> int:
             os.replace(tmp, path)
         print(f"{name}: regraded {done} row(s), pass changed on {pass_changed}, checks changed on {checks_changed}; "
               f"answer files saved {sources['saved']}, rebuilt {sources['rebuilt']}, missing {sources['missing']}; "
-              f"skipped {no_case} with no case, {no_raw} with no raw transcript"
+              f"skipped {no_case} with no case, {no_raw} with no raw transcript; "
+              f"impl rows rescored {impl['rows']} (pass changed on {impl['pass']}, checks changed on {impl['checks']}, "
+              f"indeterminate hidden runs {impl['indeterminate']})"
               + ("; dry run, nothing written" if args.dry_run else ""))
     return 0
 
