@@ -27,7 +27,7 @@ Before the results were unblinded, a blind audit split 15 items among three Opus
 | lookup | haiku high | 5/12 | +3.9 (−5.0 to +12.8) | | 0.16 ($0.66) | not cleared |
 | lookup | haiku medium | 4/12 | +8.2 (−4.2 to +20.6) | | 0.10 ($0.40) | not cleared |
 
-No hard-band case had opus at 2/2 and haiku at 0/2 at any effort. For implementation, `medium` and `high` both clear the bar and `medium` is the cheaper, at 0.16 of the opus cost. For lookup no effort shows that haiku stays within 5 points of opus. Haiku at `high` made more tool and web calls than opus and passed fewer attempts, and its misses lie in judging sources and claims: an archive that is still online declared missing, a required official source absent, a wrong oldest device. Our reading, which the sweep did not test, is that nothing in a lookup pushes back on such a miss, whereas an implementation brief carries self-verification commands that do.
+No hard-band case had opus at 2/2 and haiku at 0/2 at any effort. For implementation, `medium` and `high` both clear the bar and `medium` is the cheaper, at 0.16 of the opus cost. For lookup no effort shows that haiku stays within 5 points of opus. Haiku at `high` made more tool and web calls than opus and passed fewer attempts, and its misses lie in judging sources and claims: an archive that is still online declared missing, a required official source absent, a wrong lower bound of support. Our reading, which the sweep did not test, is that nothing in a lookup pushes back on such a miss, whereas an implementation brief carries self-verification commands that do.
 
 ## Decision
 
@@ -38,7 +38,7 @@ No hard-band case had opus at 2/2 and haiku at 0/2 at any effort. For implementa
 | `retriever` | opus | `medium`, from the definition | unchanged |
 | `researcher` | opus | `high`, from the definition | unchanged |
 
-The main thread sets the model on each dispatch, as section 2 of the playbook already requires, and the "Who" item of section 2 in the `en/` and `zh/` playbooks states the haiku condition and the opus case of tests the subagent writes, with every other dispatch on opus under its closing "the rest on opus". The agent definitions are unchanged, because `implementer` already sets effort `medium` and none of them sets a model.
+The main thread sets the model on each dispatch, as section 2 of the playbook already requires, and the "Who" item of section 2 in the `en/` and `zh/` playbooks states the condition: haiku when it holds, opus otherwise. The agent definitions are unchanged, because `implementer` already sets effort `medium` and none of them sets a model.
 
 ## Consequences
 
