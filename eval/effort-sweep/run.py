@@ -561,6 +561,7 @@ def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
         ignores = setup_ignores(case)
         if case["tier"] == "impl":
             g = grade_impl(case, ws, before)
+            changed = g["detail"]["changed"]
         else:
             changed = [p for p in changed_since(ws, before) if not path_matches(p, ignores)]
             g = grade_text(case, report + read_answer_files(case, ws, out_dir), changed)
@@ -604,7 +605,7 @@ def run_attempt(case: dict, rep: int, args, vdir: Path) -> None:
                 "dispatch_cost_usd": round(dispatch_cost, 6), "unpriced_requests": unpriced + dispatch_unpriced,
                 "leak_signals": leak_signals(uses, case),
                 "original_repo_changed": original_status(case["repo"]) != orig_before,
-                "grade_detail": g["detail"], "report_chars": len(report),
+                "grade_detail": g["detail"], "changed": changed, "report_chars": len(report),
             },
         }
         append_jsonl(vdir / "results.jsonl", row)
@@ -731,6 +732,48 @@ def row_cost(r: dict):
     return r.get("cost_usd")
 
 
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+# pytest's closing line ("4 failed, 32 passed, 1 error in 0.25s") and vitest's Tests line ("Tests  3 failed | 33 passed (36)").
+PYTEST_SUMMARY = re.compile(r"^[=\s]*(\d+ \w+(?:, \d+ \w+)*) in [\d.]+s\b")
+VITEST_SUMMARY = re.compile(r"^\s*Tests\s+(\d+ \w+(?: \| \d+ \w+)*) \(\d+\)")
+COUNT = re.compile(r"(\d+) (passed|failed|errors?)\b")
+
+
+def summary_counts(out: str) -> tuple[int, int] | None:
+    """(passed, passed + failed + errors) from the last pytest or vitest summary line in `out`; skipped is left out."""
+    found = None
+    for line in ANSI.sub("", out or "").splitlines():
+        m = PYTEST_SUMMARY.match(line) or VITEST_SUMMARY.match(line)
+        if m:
+            found = m[1]
+    if found is None:
+        return None
+    passed = failed = 0
+    for n, kind in COUNT.findall(found):
+        if kind == "passed":
+            passed += int(n)
+        else:
+            failed += int(n)
+    return (passed, passed + failed) if passed + failed else None
+
+
+def hidden_tests(detail: dict) -> tuple[int, int] | None:
+    """(passed, total) summed over the hidden commands whose output carries a test summary; None when none does.
+
+    A command that timed out (code None) counts as having no summary, whatever partial output it left.
+    """
+    counts = [summary_counts(h.get("out", "")) for h in (detail or {}).get("hidden") or [] if h.get("code") is not None]
+    counts = [c for c in counts if c is not None]
+    if not counts:
+        return None
+    return sum(p for p, _ in counts), sum(t for _, t in counts)
+
+
+def hidden_ratio(r: dict) -> float | None:
+    counts = hidden_tests(r["meta"].get("grade_detail") or {})
+    return counts[0] / counts[1] if counts else None
+
+
 def summarize_variant(vdir: Path) -> dict:
     rows = ok_rows(vdir)
     errs = read_jsonl(vdir / "errors.jsonl") if (vdir / "errors.jsonl").exists() else []
@@ -752,6 +795,10 @@ def summarize_variant(vdir: Path) -> dict:
         if costs:
             out[tier].update(cost=sum(costs), cost_med=statistics.median(costs))
             cost_text = f", cost ${sum(costs):.2f} (median ${statistics.median(costs):.3f}/attempt)"
+        ratios = [x for x in map(hidden_ratio, sub) if x is not None]
+        if ratios:
+            out[tier].update(hidden=statistics.mean(ratios), hidden_n=len(ratios))
+            cost_text += f", hidden tests {statistics.mean(ratios):.2f} (n={len(ratios)})"
         s = out[tier]
         print(f"{vdir.name:<8} {tier:<9} n={s['n']:<3} pass {s['pass']:.0%} [{lo:.0%}, {hi:.0%}]  checks {s['checks']:.2f}  "
               f"tokens median {s['tok_med']:,.0f} (range {s['tok_min']:,}-{s['tok_max']:,}), output median {s['out_med']:,.0f}, "
@@ -767,7 +814,7 @@ def print_paired(ref: str, arm: str, ref_rows: list[dict], arm_rows: list[dict])
     tok_label = "medium tokens / high tokens" if default else f"{arm} tokens / {ref} tokens"
     ids = {r["prompt_id"] for r in ref_rows} & {r["prompt_id"] for r in arm_rows}
     for label, keep in groups(ref_rows + arm_rows):
-        diffs, tok_ratio, cost_ref, cost_arm = [], [], 0.0, 0.0
+        diffs, tok_ratio, cost_ref, cost_arm, hidden_diffs = [], [], 0.0, 0.0, []
         for cid in sorted(ids):
             h = [r for r in ref_rows if r["prompt_id"] == cid and keep(r)]
             m = [r for r in arm_rows if r["prompt_id"] == cid and keep(r)]
@@ -782,12 +829,21 @@ def print_paired(ref: str, arm: str, ref_rows: list[dict], arm_rows: list[dict])
                 if ch and cm:
                     cost_ref += statistics.mean(ch)
                     cost_arm += statistics.mean(cm)
+                hh = [x for x in map(hidden_ratio, h) if x is not None]
+                hm = [x for x in map(hidden_ratio, m) if x is not None]
+                if hh and hm:
+                    hidden_diffs.append(statistics.mean(hh) - statistics.mean(hm))
         if len(diffs) >= 2:
             mean = statistics.mean(diffs)
             half = t975(len(diffs) - 1) * statistics.stdev(diffs) / len(diffs) ** 0.5
             print(f"  {label:<9} cases={len(diffs):<3} checks diff {mean:+.3f} (95% CI {mean - half:+.3f} to {mean + half:+.3f}); "
                   f"{tok_label}, median {statistics.median(tok_ratio):.2f}"
                   + (f"; {arm} cost / {ref} cost {cost_arm / cost_ref:.2f}" if cost_ref else ""))
+            if len(hidden_diffs) >= 2:
+                mean = statistics.mean(hidden_diffs)
+                half = t975(len(hidden_diffs) - 1) * statistics.stdev(hidden_diffs) / len(hidden_diffs) ** 0.5
+                print(f"  {label:<9} hidden tests diff {mean:+.3f} (95% CI {mean - half:+.3f} to {mean + half:+.3f}), "
+                      f"cases={len(hidden_diffs)}")
 
 
 def cmd_summarize(args) -> int:
@@ -837,9 +893,9 @@ def regrade_row(case: dict, raw: Path, row: dict, sources: dict) -> dict:
 
     Each answer file comes from raw/answer_files/ when saved there, else from the transcript's Write and Edit
     calls; `sources` counts saved / rebuilt / missing. The files are laid out in a scratch ws and out dir so
-    that read_answer_files joins them to the report exactly as run_attempt did. The workspace's change list
-    is not kept in rows, only grade_detail.stray_writes (the changes outside allowed_outputs), so that is
-    what readonly is judged on.
+    that read_answer_files joins them to the report exactly as run_attempt did. readonly is judged on the
+    workspace's change list in meta.changed; rows written before that field existed keep only
+    grade_detail.stray_writes (the changes outside allowed_outputs), so those are judged on that.
     """
     records = read_jsonl(raw / "subagent.jsonl")
     with tempfile.TemporaryDirectory(prefix="effort-sweep-regrade-") as td:
@@ -862,7 +918,8 @@ def regrade_row(case: dict, raw: Path, row: dict, sources: dict) -> dict:
             else:
                 sources["missing"] += 1
         answer = final_report(records) + read_answer_files(case, ws, out_dir)
-    changed = ((row.get("meta") or {}).get("grade_detail") or {}).get("stray_writes") or []
+    meta = row.get("meta") or {}
+    changed = meta["changed"] if "changed" in meta else (meta.get("grade_detail") or {}).get("stray_writes") or []
     return grade_text(case, answer, changed)
 
 
