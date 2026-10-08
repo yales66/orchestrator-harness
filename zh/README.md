@@ -32,7 +32,7 @@
 
 | 实验 | 要回答的问题 | 状态 |
 |---|---|---|
-| [推理强度对比](../eval/effort-sweep/README.md) | 子智能体在推理强度 `medium` 与 `high` 下的质量与花费相比如何？ | 已跑完：实现与检索降到 `medium` 测不出损失，词元约为一半，审查判断类没有定论，据此作出的决策记在 [ADR 0008](../docs/zh/adr/0008-subagent-effort-per-kind-of-dispatch.md) |
+| [推理强度对比](../eval/effort-sweep/README.md) | 子智能体在推理强度 `medium` 与 `high` 下、以及换用 Haiku 5.5 代替 Opus 5.5 时，质量与花费相比如何？ | 已跑完：实现与检索降到 `medium` 测不出损失，词元约为一半，审查判断类没有定论，据此作出的决策记在 [ADR 0008](../docs/zh/adr/0008-subagent-effort-per-kind-of-dispatch.md)。第二轮换用 Haiku 5.5：实现类在 `medium` 与 Opus 同等，按标价花费是 Opus 的 0.16，检索类在每一档都没过关，据此定下的派发规则记在 [ADR 0021](../docs/zh/adr/0021-implementer-runs-on-haiku-when-tests-decide-every-change.md) |
 | [漏拦请示](../eval/rules-missed-asks/README.md) | 编排手册里的请示判据能否减少回复出口漏掉的过度请示？ | 跑过之后已搁置，因为得分测不到这条规则 |
 | [请示判断探针](../eval/ask-or-act/README.md) | 现行手册能否让模型该问时问、问了也多余时直接做？ | 做过两次试跑后停止，因为回放读到的是运行回放时的文件而不是会话当时的，测不到规则 |
 | [拦截后跟进](../eval/gate-followthrough/README.md) | 回复出口拦下一条本该请示的回复之后，模型会不会照样去做那一步？ | 已设计、未运行 |
@@ -179,6 +179,7 @@ bash scripts/ci-local.sh
 | [ADR 0018：水位提醒不再拦着新工作](../docs/zh/adr/0018-the-watermark-reminder-does-not-hold-back-new-work.md) | 提醒线与硬线之间为什么照常开工 |
 | [ADR 0019：保活唤醒前先探测网络，最后一次唤醒在还有工作时写交接](../docs/zh/adr/0019-keepalive-probes-the-network-before-waking-and-hands-off-at-its-last-wake-up.md) | 网络一直不通时保活为什么在一轮结束后 57 分钟放弃，最后一次唤醒何时写交接 |
 | [ADR 0020：5 小时用量到 95% 时挂起工具调用，每 50 分钟保活一次](../docs/zh/adr/0020-tool-calls-are-held-at-95-percent-of-the-five-hour-limit.md) | 工具调用怎样等到用量重置，用量从哪里读，谁的调用放行 |
+| [ADR 0021：改动对错全由测试判定时，`implementer` 派到 Haiku](../docs/zh/adr/0021-implementer-runs-on-haiku-when-tests-decide-every-change.md) | 改动行为的对错全部由已有测试或派发说明里的验收用例判定时，`implementer` 为什么派到 Haiku 5.5 的 `medium`，`retriever` 为什么留在 Opus |
 | [评测：方法与局限](../docs/zh/evaluation.md) | 本框架主张什么、不主张什么，以及受控实验要花多少 |
 | [静态上下文测量](../eval/static-context/README.md) | 怎样运行这项测量，每组配置安装了什么 |
 | [钩子变异测试](../eval/hook-mutations/README.md) | 怎样用植入的缺陷衡量钩子测试，以及留出集 |
