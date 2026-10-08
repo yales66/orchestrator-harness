@@ -116,14 +116,14 @@ Since ADR 0008 took effect on 1 October 2026, `implementer` and `retriever` disp
 
 ### Cases
 
-The cases are real briefs dispatched between 1 and 8 October 2026 to `implementer` or `retriever` and served by `claude-opus-5-5`, chosen under the qualification rules in "Cases" above. The qualifying pool held 173 implementations and 35 lookups. Each kind is split into three difficulty bands by the tertile, within that kind, of the original subagent's tool calls in its first round:
+The cases are real briefs dispatched between 1 and 8 October 2026 to `implementer` or `retriever` and served by `claude-opus-5-5`, chosen under the qualification rules in "Cases" above. A kind here is what the September sweep calls a tier: `impl` cases were dispatched to `implementer` and `lookup` cases to `retriever`. The qualifying pool held 173 implementations and 35 lookups. Each kind is split into three difficulty bands by the tertile, within that kind, of the original subagent's tool calls in its first round, from receiving the brief to its first hand-back, since the replay feeds only the first brief and not later continuations. The cases were picked by hand, not drawn at random: within a band the picked cases come from different repositories, impl keeps its most common problem class, a code change with tests, and the web lookups the most common lookup class, web verification, with one local extraction case added. Two lookups were swapped for others in the same band because their sources could not be fetched reliably.
 
 | Kind | easy | mid | hard | Cases per band |
 |---|---|---|---|---:|
 | impl | 20 calls or fewer | 21 to 35 | 36 or more | 3 |
 | lookup | 9 calls or fewer | 10 to 20 | 21 or more | 2 |
 
-That gives 15 cases, 9 implementations and 6 lookups. Five of the six lookups verify official facts on the web, and one extracts facts from local design documents.
+That gives 15 cases, 9 implementations and 6 lookups. Five of the six lookups verify facts on the web, four of them against official pages, and one extracts facts from local design documents.
 
 | Kind | Band | What the brief asks for |
 |---|---|---|
@@ -136,7 +136,7 @@ That gives 15 cases, 9 implementations and 6 lookups. Five of the six lookups ve
 | impl | easy | a small new module with a fixed data structure and truncation rules, standard library only |
 | impl | easy | a CLI subcommand with tests in a TypeScript project |
 | impl | easy | a front-end fix showing a neutral dash when cost is unknown |
-| lookup | hard | four questions on a transit agency's realtime data APIs, from official API docs |
+| lookup | hard | four questions on a public transport operator's realtime data APIs, from official API docs |
 | lookup | hard | OS adoption figures from third-party telemetry, cross-checked |
 | lookup | mid | whether buses must hold at timing points and whether realtime predictions assume it, from official documents |
 | lookup | mid | OS version and device coverage of a vendor feature, from the vendor's support pages |
@@ -145,9 +145,9 @@ That gives 15 cases, 9 implementations and 6 lookups. Five of the six lookups ve
 
 ### Arms and runs
 
-Each case ran twice in each of four arms: opus `medium` as the reference, in `v1/`, and haiku at `xhigh`, `high` and `medium`. The subagent's model and effort are set in the agent frontmatter while the dispatcher stays on Opus, and the runner checked the served model and the effort each request carried in every attempt. All runs took place on 8 October 2026 with Claude Code 2.1.293, giving 120 valid attempts and no errors.
+Each case ran twice in each of four arms: a fresh opus `medium` reference, written to `v1/`, the directory name the September medium arm used, and haiku at `xhigh`, `high` and `medium`. The subagent's model and effort are set in the agent frontmatter while the dispatcher stays on Opus, and the runner checked the served model and the effort each request carried in every attempt. All runs took place on 8 October 2026 with Claude Code 2.1.293, giving 120 valid attempts and no errors.
 
-Haiku at `max` was piloted on two cases only and dropped. On the mid-band implementation it cost $0.97 against $0.19 at `high`, with 63 requests against 34, of which 54 of the 63 carried a prompt over 100,000 tokens, and it scored lower. Haiku at `low` was not run, because the descent stopped once `medium` cleared.
+Haiku at `max` was piloted once each on two mid-band cases, one implementation and one lookup, and dropped. On the implementation it passed but scored 0.80 of checks against 1.00 for both haiku `high` and opus, and cost $0.97 against $0.19 at `high`, with 63 requests against 34, of which 54 of the 63 carried a prompt over 100,000 tokens. The lookup failed at `max` as well. Haiku at `low` was not run, because implementation had cleared at `medium` and lookup had not cleared at any effort from `xhigh` down.
 
 ### Competence rule
 
@@ -163,21 +163,21 @@ Prices are taken from platform.claude.com/docs/en/about-claude/pricing, retrieve
 
 ### Grading audit
 
-Before the arms were unblinded, a blind audit reviewed three kinds of item under one rule applied to every arm alike: a lookup check that half or more of all attempts, pooled across arms, missed; an impl landed-test command that failed in half or more of them; and every impl attempt failed on scope or on an unmatched self-check placeholder. That came to 15 items. The reports were anonymised and shuffled, and three Opus researchers judged each item from the brief, the conclusion the main thread adopted, the code and the current official pages, without seeing which arm an attempt came from.
+Before the arms were unblinded, a blind audit reviewed three kinds of item under one rule applied to every arm alike: a lookup check that half or more of all attempts, pooled across arms, missed; an impl landed-test command that failed in half or more of them; and every impl attempt failed on scope or on an unmatched self-check placeholder, meaning the brief asked the subagent to run tests it wrote and the attempt added no file matching that command (`expand_command` in `grade.py`). That came to 15 items: eight lookup checks, four landed-test commands and three impl attempts. The reports were anonymised and shuffled, and the items were split among three `researcher` subagents running on Opus, one auditor per item, who judged it from the brief, the conclusion the main thread adopted, the code and the current official pages, without seeing which arm an attempt came from. The main thread made the final call on every item before it opened the unblinding key.
 
-Of the eight lookup checks, four were deleted because the brief never asked for the fact and only the adopted report had volunteered it: the macOS share on Steam, the rule for predictions before a journey starts, the context size of a private-cloud offering and a long-context surcharge. Two were widened as too literal. One missed a Chinese word for "ferry", and widening it raised its hits from 4 of 8 to 7 of 8. The other pinned an official source to one document version although the brief asked for any official agency document; the auditors judged that miss genuine, and the main thread overrode them and widened the check, since the adopted report itself cites the second document. Two checks were kept as genuine misses: the coverage of one endpoint, and an alert archive from 2017 that is still online although most reports said it did not exist. None of the official pages had changed since the dates the checks were anchored to, which was rechecked on 8 October 2026. For the long-context surcharge the auditors had offered widening as an option, and the main thread deleted the check so that "not asked, not graded" applies to every check alike.
+Of the eight lookup checks, four were deleted because the brief never asked for the fact and only the adopted report had volunteered it: the macOS share on Steam, the rule for predictions before a journey starts, the context size of a private-cloud offering and a long-context surcharge. Two were widened as too literal. One missed a synonym in the source language, and widening it raised its hits from 4 of 8 to 7 of 8. The other pinned an official source to one document version although the brief asked for any official agency document; the auditor judged that miss genuine, and the main thread overrode it and widened the check, since the adopted report itself cites the second document. Two checks were kept as genuine misses: the coverage of one endpoint, and a historical alert archive that is still online although most reports said it did not exist. None of the official pages had changed since the dates the checks were anchored to, which was rechecked on 8 October 2026. For the long-context surcharge the auditor had offered widening as an option, and the main thread deleted the check so that "not asked, not graded" applies to every check alike.
 
-The blind auditors judged all three impl attempts failed on scope or on a placeholder to be real violations of their briefs. Two were haiku attempts that edited a file outside the listed scope. The third, an Opus attempt, turned out on unblinding to be a blind spot of the grader: following its brief, which told it to create a worktree and a branch, it did all its work in a nested worktree and committed it. The grader now grades a nested worktree when the main checkout is untouched and soft-resets commits onto the base, for every arm, and that attempt was run again and passed. Across four cases, 18 landed tests asserted details no brief fixed, such as the order of returned cards, the spelling of a colour, or behaviour the main thread added later, and the cases now exclude them through `hidden.exclude`. One landed-test replay of a haiku `xhigh` attempt stopped at collection and counts as indeterminate.
+The blind auditor judged all three impl attempts failed on scope or on a placeholder to be real violations of their briefs. Two were haiku attempts that edited a file outside the listed scope. The third, an Opus attempt, turned out on unblinding to be a blind spot of the grader: following its brief, which told it to create a worktree and a branch, it did all its work in a nested worktree and committed it. The grader now grades a nested worktree when the main checkout is untouched and soft-resets commits onto the base, for every arm, and that attempt was run again and passed. The workspace of every attempt is deleted after grading and the worktree's changes had never been graded, so there was nothing to regrade offline; the rerun's row replaced the original in `v1/`, and the $20.47 opus impl total excludes the replaced attempt's $0.55. Across four cases, 18 landed tests asserted details no brief fixed, such as the order of returned cards, the spelling of a colour, or behaviour the main thread added later, and the cases now exclude them through `hidden.exclude`. One landed-test replay of a haiku `xhigh` attempt stopped at collection and counts as indeterminate.
 
-`regrade` applied the audited checks offline from the saved transcripts; with the checks unchanged it reproduced every grade exactly. Before the audit the lookup pass rates were 2/12 for opus, 0/12 for haiku `xhigh`, 1/12 for haiku `high` and 0/12 for haiku `medium`, and after it they are 7/12, 6/12, 5/12 and 4/12. The impl paired differences moved by at most 1.9 percentage points, and no impl pass changed.
+`regrade` applied the audited checks offline from the saved transcripts; with the checks unchanged it reproduced every grade exactly. Before the audit the lookup pass rates were 2/12 for opus, 0/12 for haiku `xhigh`, 1/12 for haiku `high` and 0/12 for haiku `medium`, and after it they are 7/12, 6/12, 5/12 and 4/12. The impl paired differences moved by at most 1.9 percentage points, and the offline regrade changed no impl pass; the one impl attempt that went from fail to pass is the nested-worktree attempt above, which was run again rather than regraded.
 
 ### Results
 
-`python3 eval/effort-sweep/run.py summarize --data "$DATA" --ref v1 --arms haiku-xhigh,haiku-high,haiku-medium` prints the figures below after the audit. Differences are opus minus haiku in percentage points, so a negative value means haiku satisfied more.
+`python3 eval/effort-sweep/run.py summarize --data "$DATA" --ref v1 --arms haiku-xhigh,haiku-high,haiku-medium` prints these figures after the audit as shares; the table gives them in percentage points, and the verdict column applies the competence rule. Differences are opus minus haiku, so a negative value means haiku satisfied more. The cost column gives the arm's list-price total over all its attempts in brackets. Anyone can run the scripts on briefs of their own, but this table can be recomputed only from the private data directory.
 
-| Kind | Arm | Pass | Paired checks difference, opus − haiku, pp (95% CI) | Landed-test share difference, pp (95% CI) | Haiku cost ÷ opus | Verdict |
+| Kind | Arm | Pass | Paired checks difference, opus − haiku, pp (95% CI) | Landed-test share difference, pp (95% CI) | Haiku cost ÷ opus (arm total) | Verdict |
 |---|---|---|---|---|---|---|
-| impl | opus medium | 18/18 | | | ($20.47 total) | reference |
+| impl | opus medium | 18/18 | | | ($20.47) | reference |
 | impl | haiku medium | 18/18 | −2.8 (−9.2 to +3.6) | −0.2 (−0.6 to +0.3) | 0.16 ($3.28) | competent |
 | impl | haiku high | 17/18 | +0.3 (−4.2 to +4.8) | +0.1 (−0.4 to +0.5) | 0.28 ($5.72) | competent |
 | impl | haiku xhigh | 17/18 | −1.1 (−8.4 to +6.3) | −0.1 (−0.7 to +0.5) | 0.43 ($8.88) | interval too wide |
@@ -186,9 +186,9 @@ The blind auditors judged all three impl attempts failed on scope or on a placeh
 | lookup | haiku high | 5/12 | +3.9 (−5.0 to +12.8) | | 0.16 ($0.66) | not cleared |
 | lookup | haiku medium | 4/12 | +8.2 (−4.2 to +20.6) | | 0.10 ($0.40) | not cleared |
 
-No hard-band case had opus at 2/2 and haiku at 0/2 at any effort. For implementation, haiku `medium` and `high` both meet the rule and `medium` is the cheaper; for lookup no effort does.
+No hard-band case had opus at 2/2 and haiku at 0/2 at any effort. For implementation, haiku `medium` and `high` both meet the rule and `medium` is the cheaper, which on nine cases rules out a loss of more than 5 points of checks; for lookup no effort shows that haiku stays within 5 points of opus.
 
-The medians per lookup attempt show where haiku falls short:
+The medians per lookup attempt show that haiku did not lose points by searching less:
 
 | Arm | Tool calls | Web calls | Seconds |
 |---|---:|---:|---:|
@@ -197,9 +197,9 @@ The medians per lookup attempt show where haiku falls short:
 | haiku high | 16 | 14.5 | 119 |
 | haiku medium | 10.5 | 8.5 | 63 |
 
-Haiku at `high` searched more than opus and still scored lower. Its misses lie in judging sources and claims, such as an archive declared missing, a required official source absent or a wrong oldest device, and nothing in a lookup pushes back on such a miss, whereas implementation briefs carry self-verification commands that do.
+Haiku at `high` searched more than opus and still passed fewer attempts, and at `xhigh` it took a median of about 2.7 times as long. Its misses lie in judging sources and claims, such as an archive that is still online declared missing, a required official source absent or a wrong oldest device. Our reading, which the sweep did not test, is that nothing in a lookup pushes back on such a miss, whereas implementation briefs carry self-verification commands that do. The grading baseline also leans towards opus, since the lookup checks come from adopted reports mostly written by opus and the landed tests from changes opus made, so the lookup verdict should be read with that lean in mind.
 
-Haiku uses more tokens than opus on the same brief, an impl median ratio of 1.8 at `medium` and 2.8 at `high`, but its list cost is far lower. The largest impl case had most of its haiku requests above 100,000 prompt tokens and was the most expensive haiku case, at $1.7 to $2.0 per attempt at `high`.
+Haiku uses more tokens than opus on the same brief, an impl median ratio of 1.8 at `medium` and 2.8 at `high`, but its list cost is far lower. The most expensive haiku case was the largest impl case, the one whose haiku requests mostly exceeded 100,000 prompt tokens, at $1.7 to $2.0 per attempt at `high`.
 
 At list prices the sweep's subagents cost about $46: $24.5 for the opus reference and $19.9 for the haiku arms, of which $9.86 at `xhigh`, $6.38 at `high` and $3.68 at `medium`, plus $1.26 for the haiku `max` pilot. The dispatching main thread added about $0.14 per attempt, and the audits and drafting by Opus subagents are not included. The runs themselves drew on a subscription allowance.
 
