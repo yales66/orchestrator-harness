@@ -48,7 +48,7 @@ The condition exists because of how a first implementation is checked. When the 
 
 The grading baseline leans towards the reference arm. Lookup checks come from the reports the main thread adopted, mostly written by opus, and landed tests come from changes opus made; the audit removed checks for facts no brief asked for, but the lookup verdict in particular should be read with that lean in mind.
 
-Three follow-ups remain open. A lookup brief that carries a checklist of required sources may let haiku clear the bar, and should be tried on haiku. A larger lookup sample at `xhigh` would narrow an interval that six cases leave wide. Since Claude Code 2.1.292 the Agent tool accepts effort per call, which ADR 0008 said should lead to merging `researcher` and `retriever` into one read-only definition; that merge has not been made.
+A checklist at the end of each lookup brief, asking for an official source and a quoted sentence per conclusion for the routes tried before "not found", and for another route after a 403, a 404 or an unreadable PDF, was tried on haiku at `high`. It cleared the bar once under checks revised after the original four arms were unblinded and failed a confirmation run with those checks frozen, so `retriever` stays on opus; the section "Lookup follow-up" of `eval/effort-sweep/README.md` has the figures, and shows that part of the lookup gap above came from how the checks were written. Two follow-ups remain open. More lookup cases at `xhigh`, not more reps, would narrow an interval that six cases leave wide. Since Claude Code 2.1.292 the Agent tool accepts effort per call, which ADR 0008 said should lead to merging `researcher` and `retriever` into one read-only definition; that merge has not been made.
 
 ## Sources
 
