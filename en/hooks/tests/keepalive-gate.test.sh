@@ -200,12 +200,18 @@ printf '%s\n' '{"type":"user","message":{"role":"user","content":"在吗"}}' >"$
 report allow "$(PROBE="file://$DOWN" T="$t" verdict "$(payload "$t")" 'sleep 1; cat "$TMP/back.jsonl" >>"$T"')" "重试期间用户回来了，不唤醒"
 t=$(mk "net2.jsonl" user:0 asst:200000)
 report allow "$(SL=2 DL=1 verdict "$(payload "$t")")" "醒来已过截止（如合盖睡眠），不唤醒"
-python3 -u -m http.server 0 --bind 127.0.0.1 >"$TMP/http.log" 2>&1 &
+# 本地 HTTP 服务：绑定成功后把端口写进文件，不从输出里解析（CI 的 macOS 上解析 http.server 的输出等不到端口）
+python3 -c '
+import http.server, sys
+s = http.server.HTTPServer(("127.0.0.1", 0), http.server.SimpleHTTPRequestHandler)
+open(sys.argv[1] + ".tmp", "w").write(str(s.server_port))
+__import__("os").replace(sys.argv[1] + ".tmp", sys.argv[1])
+s.serve_forever()' "$TMP/http.port" >"$TMP/http.log" 2>&1 &
 HTTP_PID=$!
 trap 'kill $HTTP_PID 2>/dev/null; rm -rf "$TMP"' EXIT
-# 慢机器上 http.server 起来要好几秒（CI 的 macOS 跑满 2 秒还没打印端口），最多等 10 秒，等不到就报错
-for _ in $(seq 50); do PORT=$(grep -o 'port [0-9]*' "$TMP/http.log" | grep -o '[0-9]*'); [ -n "$PORT" ] && break; sleep 0.2; done
-[ -n "$PORT" ] || { echo "测试用 HTTP 服务 10 秒内没起来"; exit 1; }
+for _ in $(seq 50); do [ -s "$TMP/http.port" ] && break; sleep 0.2; done
+PORT=$(cat "$TMP/http.port" 2>/dev/null)
+[ -n "$PORT" ] || { echo "测试用 HTTP 服务 10 秒内没起来："; cat "$TMP/http.log"; exit 1; }
 report wake "$(PROBE="http://127.0.0.1:$PORT/no-such-path" verdict "$(payload "$t")")" "服务端回 404 也算连得上"
 kill $HTTP_PID 2>/dev/null; wait $HTTP_PID 2>/dev/null
 report allow "$(PROBE="http://127.0.0.1:$PORT/" verdict "$(payload "$t")")" "端口关着算连不上"
