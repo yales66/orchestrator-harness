@@ -66,7 +66,7 @@
 | `orchestrator-playbook.md` | 主线程作为编排者的规则：委派什么、怎样写子智能体派发说明、怎样交接长任务、交付闸门、git 约定 |
 | `hooks/` | 在 `settings.json` 中注册的钩子，均为 `.sh` 脚本，每个钩子都从标准输入读取钩子 JSON；另有状态栏包装 `statusline-tee.sh`，由 `settings.json` 设为 `statusLine` 命令，从标准输入读取状态栏 JSON |
 | `hooks/tests/` | 覆盖 `hooks/` 下全部十五个脚本的回归测试 |
-| `agents/` | 三个子智能体的定义，各自在开头的配置字段里设定推理强度：`researcher`（强度 `high`）接需要判断的只读审查、诊断、调研与草拟，`retriever`（强度 `medium`）接只读检索与抽取，`implementer`（强度 `medium`）接设计决定已由派发说明定死的实现。`researcher` 与 `retriever` 只在派发说明给定的路径或系统临时目录下新建文件，这条限制来自子智能体定义里的指令；只读守卫钩子强制执行的只是不改已有文件。环境变量 `CLAUDE_CODE_EFFORT_LEVEL` 一旦设置，就会盖过这三个定义里的推理强度 |
+| `agents/` | 三个子智能体的定义，各自在开头的配置字段里设定推理强度：`researcher`（强度 `high`）接需要判断的只读审查、诊断、调研与草拟，`retriever`（强度 `medium`）接只读检索与抽取，`implementer`（强度 `medium`）接设计决定已由派发说明定死的实现，改动行为的对错全部由已有测试或派发说明列出的验收用例判定时，主线程把它派到 haiku，有任何一处要子智能体自写测试来定对错时派到 opus（见 [ADR 0021](../docs/zh/adr/0021-implementer-runs-on-haiku-when-tests-decide-every-change.md)）。`researcher` 与 `retriever` 只在派发说明给定的路径或系统临时目录下新建文件，这条限制来自子智能体定义里的指令；只读守卫钩子强制执行的只是不改已有文件。环境变量 `CLAUDE_CODE_EFFORT_LEVEL` 一旦设置，就会盖过这三个定义里的推理强度 |
 | `skills/` | 为本框架编写的技能，由 Claude Code 按需加载。`handoff` 与 `feature-sharding` 两个技能的辅助脚本及其 pytest 测试分别放在 `skills/handoff/scripts/` 与 `skills/feature-sharding/scripts/` |
 | `settings.example.json` | 注册全部钩子的 `hooks` 配置块，路径位于 `$HOME/.claude` 之下；一条运行 `statusline-tee.sh`、不带被包装命令的 `statusLine` 条目，只记录用量、不显示状态栏；以及拒绝 `AskUserQuestion` 的 `permissions.deny` 列表 |
 

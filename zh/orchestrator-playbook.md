@@ -28,7 +28,7 @@
 
 ## 2. Subagent 派发
 
-派给谁（model 一律显式指定）：开放式全仓定位 → Explore(haiku)；纯机械批量（找文件/跑脚本/扫描）→ haiku fan-out；读到即可报的事实（检索/抽取/翻会话记录，含联网）→ `retriever`；要下判断的只读活（审查/诊断/调研/草拟，含联网）→ `researcher`；判断已写死的实现 → `implementer`；这三者与其余都用 opus。
+派给谁（model 一律显式指定）：开放式全仓定位 → Explore(haiku)；纯机械批量（找文件/跑脚本/扫描）→ haiku fan-out；读到即可报的事实（检索/抽取/翻会话记录，含联网）→ `retriever`；要下判断的只读活（审查/诊断/调研/草拟，含联网）→ `researcher`；判断已写死的实现 → `implementer`：改动行为的对错全部由已有测试或 brief 列出的验收用例（输入与期望输出，含边界）判定 → haiku；有任何一处要 subagent 自写测试来定对错 → opus；`retriever`、`researcher` 与其余都用 opus。
 
 - 只读派发的交付物要有界（一个判断/命令/是否 + 证据，答到即停）；「列全/排名/每项都配」这类无停止点的穷举 → 封顶（只取最可能的一个 + 为什么）或拆发。拆发时后步依赖前步结论的合成一发；并行的落盘型派发之间文件不得重叠。
 - 落盘型派到主线程工作区：prompt 写死 subagent 只读 git（log/blame/show/diff/status），禁 reset／`checkout --`／restore／stash／clean／switch，禁自行提交；每轮派发结束主线程提交一次。要 subagent 自行提交则用 `isolation:"worktree"`，主线程负责合流。
