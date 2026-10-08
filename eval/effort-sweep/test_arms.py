@@ -169,3 +169,14 @@ def test_default_labels_stay_high_minus_medium(tmp_path, capsys):
     out = summarize(tmp_path, capsys)
     assert "paired by case (mean over reps), high minus medium:" in out
     assert "medium tokens / high tokens, median 0.50" in out
+
+
+# ---------------------------------------------------------------- dry-run sample
+
+@pytest.mark.parametrize("tiers,expected", [
+    (["impl", "lookup", "judgement", "impl"], ["c0", "c1", "c2"]),
+    (["impl", "impl", "lookup", "lookup"], ["c0", "c2"]),
+], ids=["all-tiers", "no-judgement-tier"])
+def test_dry_run_takes_first_case_of_each_tier_present(tiers, expected):
+    cases = [{"id": f"c{i}", "tier": t} for i, t in enumerate(tiers)]
+    assert [c["id"] for c in run.dry_run_cases(cases)] == expected

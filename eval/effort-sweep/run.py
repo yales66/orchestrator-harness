@@ -587,6 +587,14 @@ def ensure_change_md(vdir: Path, effort: str, model: str = "opus") -> None:
     (vdir / "change.md").write_text(text, encoding="utf-8")
 
 
+def dry_run_cases(cases: list[dict]) -> list[dict]:
+    """One case per tier, for a dry run; a case set may leave a tier out."""
+    first = {}
+    for c in cases:
+        first.setdefault(c["tier"], c)
+    return [first[t] for t in TIERS if t in first]
+
+
 def cmd_run(args) -> int:
     data = args.data
     if os.environ.get("CLAUDE_CODE_EFFORT_LEVEL"):
@@ -603,7 +611,7 @@ def cmd_run(args) -> int:
         wanted = set(args.cases.split(","))
         cases = [c for c in cases if c["id"] in wanted]
     elif args.dry_run:
-        cases = [next(c for c in cases if c["tier"] == t) for t in TIERS]
+        cases = dry_run_cases(cases)
     vdir = data / variant_dir(args.model, args.effort)
     done = set()
     if not args.dry_run:
