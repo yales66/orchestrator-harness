@@ -2,7 +2,7 @@
 
 ## 状态
 
-已采纳，自 2026 年 10 月 8 日起生效。本决策只改主线程派发 `implementer` 时设定的模型；[ADR 0008](0008-subagent-effort-per-kind-of-dispatch.md) 设定的推理强度不变，编排手册对其余各类派发的路由也不变。
+已采纳，自 2026 年 10 月 8 日起生效；其中 `retriever` 一行自 2026 年 10 月 9 日起由 [ADR 0022](0022-retriever-runs-on-haiku-when-the-brief-limits-it-to-local-files-or-one-named-page.md) 修订。本决策只改主线程派发 `implementer` 时设定的模型；[ADR 0008](0008-subagent-effort-per-kind-of-dispatch.md) 设定的推理强度不变，编排手册对其余各类派发的路由也不变。
 
 ## 背景
 
@@ -48,7 +48,7 @@ ADR 0008 自 2026 年 10 月 1 日生效以来，`implementer` 与 `retriever` �
 
 评分基准偏向参照组。检索检查项出自主线程采纳的报告，这些报告多由 opus 写成；落地测试出自 opus 做出的改动。盲审删掉了派发说明没要求的检查项，但检索类的结论仍应考虑这层偏向。
 
-在每份检索派发说明末尾加一份清单，要求每条结论附官方出处与原文一句、写「查不到」前列出试过的网址与检索词、遇 403、404 或读不了的 PDF 先换路径再下结论，已在 haiku 的 `high` 档上试过：以原四组揭盲后修订的检查项评分，过关一次；检查项冻结后的确认轮没有过关，所以 `retriever` 仍留在 opus。数字见 `eval/effort-sweep/README.md` 的「Lookup follow-up」一节，该节也表明上文检索类的差距有一部分出自检查项的写法。有两项后续工作尚未做。检索类在 `xhigh` 档增加用例数（不是重复次数），可以收窄 6 个用例留下的宽区间。自 Claude Code 2.1.292 起，Agent 工具已能按次设推理强度，ADR 0008 说过到那时应把 `researcher` 与 `retriever` 合并成一个只读定义，这次合并还没有做。
+在每份检索派发说明末尾加一份清单，要求每条结论附官方出处与原文一句、写「查不到」前列出试过的网址与检索词、遇 403、404 或读不了的 PDF 先换路径再下结论，已在 haiku 的 `high` 档上试过：以原四组揭盲后修订的检查项评分，过关一次；检查项冻结后的确认轮没有过关，所以按胜任规则 `retriever` 留在 opus；[ADR 0022](0022-retriever-runs-on-haiku-when-the-brief-limits-it-to-local-files-or-one-named-page.md) 凭判断把限定在本地文件、会话记录或点名的单个网页的查找派给 haiku。数字见 `eval/effort-sweep/README.md` 的「Lookup follow-up」一节，该节也表明上文检索类的差距有一部分出自检查项的写法。有两项后续工作尚未做。检索类在 `xhigh` 档增加用例数（不是重复次数），可以收窄 6 个用例留下的宽区间。自 Claude Code 2.1.292 起，Agent 工具已能按次设推理强度，ADR 0008 说过到那时应把 `researcher` 与 `retriever` 合并成一个只读定义，这次合并还没有做。
 
 ## 出处
 
