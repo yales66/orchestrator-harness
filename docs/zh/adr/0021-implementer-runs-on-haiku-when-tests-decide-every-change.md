@@ -2,7 +2,7 @@
 
 ## 状态
 
-已采纳，自 2026 年 10 月 8 日起生效；其中 `retriever` 一行自 2026 年 10 月 9 日起由 [ADR 0022](0022-retriever-runs-on-haiku-when-the-brief-limits-it-to-local-files-or-one-named-page.md) 修订。本决策只改主线程派发 `implementer` 时设定的模型；[ADR 0008](0008-subagent-effort-per-kind-of-dispatch.md) 设定的推理强度不变，编排手册对其余各类派发的路由也不变。
+已采纳，自 2026 年 10 月 8 日起生效；其中 `retriever` 一行自 2026 年 10 月 9 日起由 [ADR 0022](0022-retriever-runs-on-haiku-when-the-brief-limits-it-to-local-files-or-one-named-page.md) 修订，`implementer` 两行自 2026 年 10 月 14 日起由 [ADR 0023](0023-implementer-runs-on-haiku-when-tests-decide-including-its-own.md) 修订。本决策只改主线程派发 `implementer` 时设定的模型；[ADR 0008](0008-subagent-effort-per-kind-of-dispatch.md) 设定的推理强度不变，编排手册对其余各类派发的路由也不变。
 
 ## 背景
 
