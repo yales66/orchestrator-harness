@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. In effect since 8 October 2026; its `retriever` row is amended by [ADR 0022](0022-retriever-runs-on-haiku-when-the-brief-limits-it-to-local-files-or-one-named-page.md) from 9 October 2026. It changes only the model the main thread sets when it dispatches `implementer`; the effort settings of [ADR 0008](0008-subagent-effort-per-kind-of-dispatch.md) stand, and the playbook's routing of every other kind of dispatch is unchanged.
+Accepted. In effect since 8 October 2026; its `retriever` row is amended by [ADR 0022](0022-retriever-runs-on-haiku-when-the-brief-limits-it-to-local-files-or-one-named-page.md) from 9 October 2026, and its `implementer` rows by [ADR 0023](0023-implementer-runs-on-haiku-when-tests-decide-including-its-own.md) from 14 October 2026. It changes only the model the main thread sets when it dispatches `implementer`; the effort settings of [ADR 0008](0008-subagent-effort-per-kind-of-dispatch.md) stand, and the playbook's routing of every other kind of dispatch is unchanged.
 
 ## Context
 
