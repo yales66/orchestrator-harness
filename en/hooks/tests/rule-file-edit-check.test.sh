@@ -45,6 +45,9 @@ check remind ".claude/commands 下的 md"              /work/proj/.claude/comman
 check remind ".claude/commands 子目录下的 md"        /work/proj/.claude/commands/sub/ship.md
 check remind ".claude/agents 下的 md"                /work/proj/.claude/agents/reviewer.md
 check remind ".claude/output-styles 下任意文件"      /work/proj/.claude/output-styles/terse
+check remind "编排手册"                              /home/u/.claude/orchestrator-playbook.md
+check remind "技能附属数据文件"                      /home/u/.claude/skills/x/calibration.md
+check remind "技能参考文件"                          /home/u/.claude/skills/x/references/notes.md
 check_payload remind "Write 工具同样提醒" \
   '{"hook_event_name":"PostToolUse","tool_name":"Write","tool_input":{"file_path":"/p/CLAUDE.md","content":"x"}}'
 
@@ -56,7 +59,6 @@ check silent "小写 claude.md"                        /work/proj/claude.md
 check silent "不带目录的相对路径 CLAUDE.md"          CLAUDE.md
 check silent ".claude/commands 下的非 md 文件"       /work/proj/.claude/commands/ship.txt
 check silent ".claude/agents 下的非 md 文件"         /work/proj/.claude/agents/notes.json
-check silent "skills 下的其他 md"                    /home/u/.claude/skills/x/reference.md
 
 echo "── 输入异常一律放行（不输出）──"
 check_payload silent "缺 tool_input"                 '{"hook_event_name":"PostToolUse","tool_name":"Edit"}'
@@ -64,6 +66,29 @@ check_payload silent "file_path 为空串"              '{"tool_input":{"file_pa
 check_payload silent "file_path 为 null"             '{"tool_input":{"file_path":null}}'
 check_payload silent "非 JSON 输入"                  'not json at all'
 check_payload silent "空输入"                        ''
+
+echo "── 同一上下文同一文件只提醒一次（按 scratchpad_dir 记标记）──"
+TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+# sp_payload <文件路径> <scratchpad_dir> [agent_id]
+sp_payload() {
+  P="$1" SP="$2" AID="${3:-}" python3 -c '
+import json, os
+d = {"hook_event_name": "PostToolUse", "tool_name": "Edit",
+     "tool_input": {"file_path": os.environ["P"]}}
+if os.environ["SP"]: d["scratchpad_dir"] = os.environ["SP"]
+if os.environ["AID"]: d["agent_id"] = os.environ["AID"]
+print(json.dumps(d))
+'
+}
+SP="$TMP/sp"; mkdir -p "$SP"
+check_payload remind "规则文件首次改动提醒"              "$(sp_payload /x/.claude/skills/a/SKILL.md "$SP")"
+check_payload silent "同会话同文件第二次不再提醒"        "$(sp_payload /x/.claude/skills/a/SKILL.md "$SP")"
+check_payload remind "同会话另一个规则文件照常提醒"      "$(sp_payload /x/.claude/skills/b/SKILL.md "$SP")"
+check_payload remind "子智能体改主线程改过的文件仍提醒"  "$(sp_payload /x/.claude/skills/a/SKILL.md "$SP" agent-1)"
+check_payload silent "同一子智能体第二次不再提醒"        "$(sp_payload /x/.claude/skills/a/SKILL.md "$SP" agent-1)"
+check_payload remind "另一个子智能体各自提醒一次"        "$(sp_payload /x/.claude/skills/a/SKILL.md "$SP" agent-2)"
+check_payload remind "没有 scratchpad_dir 时每次提醒"    "$(sp_payload /x/.claude/skills/a/SKILL.md "")"
+check_payload remind "scratchpad_dir 不存在时每次提醒"   "$(sp_payload /x/.claude/skills/a/SKILL.md "$TMP/missing")"
 
 echo
 echo "PASS=$PASS FAIL=$FAIL"

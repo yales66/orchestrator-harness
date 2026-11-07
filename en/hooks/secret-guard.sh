@@ -1,13 +1,19 @@
 #!/bin/bash
-# PreToolUse(Bash|Read) hook: 密钥值不进入模型上下文。
+# PreToolUse(Bash|Read|Grep) hook: 密钥值不进入模型上下文。
 #
 # 工具输出会原样进入上下文，随后留在会话记录里，还可能被写进报告或提交；密钥一旦
 # 打印出来就等于已经外泄，事后无从收回。所以在调用前拦「会把值打印出来」的操作，
 # 而不拦「用到值」的操作：source .env 后跑命令、curl 带上 $TOKEN、test -n 判断存在，
 # 值都只在进程里流转，不会出现在输出里。
 #
-# Read：文件名是 .env 或 .env.* 就拒绝；.env.example/.sample/.template 是约定俗成的
-#   无值样例，放行。文件名按小写比较，大小写不敏感的文件系统上 .ENV 就是 .env。
+# 密钥文件：文件名是 .env 或 .env.*（.env.example/.sample/.template 是约定俗成的无值样例，
+#   不算；文件名按小写比较，大小写不敏感的文件系统上 .ENV 就是 .env）；~/.ssh 下除公钥
+#   （*.pub）、config、known_hosts、authorized_keys 之外的文件，即私钥；路径含 .kamal/secrets
+#   的文件，即 Kamal 部署密钥。后两类来自全局与项目 CLAUDE.md 的密钥纪律。
+# Read：目标是密钥文件就拒绝。
+# Grep：output_mode 为 content 时匹配行原样进上下文；path 是密钥文件，或 path 目录下任意
+#   深度有会被 glob 选中的密钥文件，就拒绝。glob 含花括号时无从用 fnmatch 判断，按选中算；
+#   Grep 是否跳过点文件按会搜到算。files_with_matches（缺省）与 count 只给文件名或计数，放行。
 # Bash：按 && || ; | 与换行拆成子命令逐段判断，命令替换 $(...) 与反引号也拆开，
 #   这样 git check-ignore .env 这类只提到文件名的命令不会因为别的片段被误伤。
 #   bash/sh/zsh -c 的命令串与 eval 的参数当作命令同样逐段判断，最多嵌套 3 层。
@@ -23,14 +29,19 @@
 #   .env 没被 --exclude、--exclude-dir、rg 的 -g/--glob 取反模式排掉，也没因 --include 或
 #   rg 的正向 -g 落在搜索范围外。.git 与 node_modules 不查；遍历超过 20000 项就放行，
 #   大目录树上的 hook 不能拖住每条命令。rg 默认跳过点文件，不带这些选项的 rg 不查目录；
+#   上述「.env」都指密钥文件。
 #   echo/printf 展开名称含 KEY/SECRET/TOKEN/PASSWORD/PASSWD/CREDENTIAL 的变量；
 #   printenv 不带参数或参数名含上述片段；env、export -p、set 不带命令或赋值地单独使用。
 #   ${#VAR} 只给长度，不算展开。
 #   相对的搜索根按输入里的 cwd 解析，并跟随同一条命令里前面以 && || ; 或换行相接的
 #   cd/pushd；cd 的目标不是字面量（含 $ 或反引号，或是 cd -）时搜索根无从确定，按含 .env 算。
+# 拒绝时先追加一行 JSON 到拒绝日志 ${PERMISSION_DENIED_LOG:-~/.claude/state/permission-denied.jsonl}，
+#   与 permission-denied-log.sh 同一文件同一字段，source 与 reason 记 hook:secret-guard：
+#   PermissionDenied 事件只在自动模式分类器拒绝时触发，钩子拒绝不经过它，不自己记就看不到。
+#   写日志失败不影响拒绝。
 # 任何异常一律放行，hook 不该卡死会话。
 python3 -c '
-import fnmatch, json, os, re, shlex, sys
+import datetime, fnmatch, json, os, re, shlex, sys
 
 try:
     p = json.load(sys.stdin)
@@ -51,7 +62,34 @@ def is_env_file(path):
         return False
     return re.fullmatch(r"\.env(\..*|\*.*)?", name) is not None
 
+SSH_PUBLIC = {"config", "known_hosts", "authorized_keys"}
+
+def is_secret_file(path):
+    p = os.path.expanduser(str(path))
+    name = os.path.basename(p).lower()
+    if is_env_file(p):
+        return True
+    if re.search(r"(^|/)\.ssh/", p) and not name.endswith(".pub") and name not in SSH_PUBLIC:
+        return True
+    return re.search(r"(^|/)\.kamal/secrets", p) is not None
+
+def log_denial():
+    try:
+        target = ti.get("command") or ti.get("file_path") or ti.get("path") or ""
+        rec = {"ts": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+               "session_id": p.get("session_id"), "cwd": p.get("cwd"), "tool_name": tool,
+               "target": str(target)[:300], "reason": "hook:secret-guard",
+               "source": "hook:secret-guard"}
+        log = os.environ.get("PERMISSION_DENIED_LOG") or os.path.expanduser(
+            "~/.claude/state/permission-denied.jsonl")
+        os.makedirs(os.path.dirname(log) or ".", exist_ok=True)
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
 def deny(reason):
+    log_denial()
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
         "permissionDecision": "deny",
@@ -61,19 +99,20 @@ def deny(reason):
 SAFE = ("需要确认的是「有没有」而不是「是什么」时，改用不打印值的写法："
         "看某项是否配置用 grep -c \x27^NAME=\x27 .env 或 grep -q NAME .env；"
         "看变量是否存在用 test -n \"$API_KEY\" && echo set 或 [ -n \"$TOKEN\" ]；"
-        "要带着这些变量跑命令用 source .env 后直接执行，或 env FOO=1 cmd；"
+        "只列已导出的变量名用 compgen -e（env | cut -d= -f1 会把多行值的续行原样打出来）；"
+        "要带着这些变量跑命令用 set -a; source .env; set +a 载入后直接执行，或 env FOO=1 cmd；"
         "递归搜索用 --exclude=\x27.env*\x27（rg 用 -g \x27!.env*\x27）把 .env 排掉；"
         "要了解有哪些配置项读 .env.example。")
 
 if tool == "Read":
     fp = ti.get("file_path")
-    if isinstance(fp, str) and is_env_file(fp):
-        deny("密钥值不能进入模型上下文，不读取 .env 类文件。" + SAFE)
+    if isinstance(fp, str) and is_secret_file(fp):
+        deny("密钥值不能进入模型上下文，不读取 .env、SSH 私钥与 .kamal/secrets 这类密钥文件。" + SAFE)
     sys.exit(0)
-if tool != "Bash":
+if tool not in ("Bash", "Grep"):
     sys.exit(0)
 cmd = ti.get("command")
-if not isinstance(cmd, str):
+if tool == "Bash" and not isinstance(cmd, str):
     sys.exit(0)
 
 READERS = {"cat", "less", "more", "head", "tail", "bat", "nl", "awk", "gawk", "tac",
@@ -114,7 +153,7 @@ def env_under(roots, searched):
             return True
         if os.path.isfile(root):
             name = os.path.basename(root)
-            if is_env_file(name) and searched(name, name, False):
+            if is_secret_file(root) and searched(name, name, False):
                 return True
             continue
         for dp, dns, fns in os.walk(root):
@@ -125,7 +164,7 @@ def env_under(roots, searched):
             rel = (lambda n: n) if base == "." else (lambda n: base + "/" + n)
             dns[:] = [d for d in dns
                       if d not in (".git", "node_modules") and searched(d, rel(d), True)]
-            if any(is_env_file(f) and searched(f, rel(f), False) for f in fns):
+            if any(is_secret_file(os.path.join(dp, f)) and searched(f, rel(f), False) for f in fns):
                 return True
     return False
 
@@ -134,6 +173,23 @@ def root_path(path, where):
     if os.path.isabs(path):
         return path
     return None if where is None else os.path.join(where, path)
+
+if tool == "Grep":
+    if (ti.get("output_mode") or "files_with_matches") == "content":
+        path = ti.get("path") if isinstance(ti.get("path"), str) and ti.get("path") else "."
+        path = os.path.normpath(root_path(path, cwd))
+        g = ti.get("glob") if isinstance(ti.get("glob"), str) else ""
+
+        def picked(n, rel, is_dir):
+            # 目录一律进；花括号 glob（*.{ts,tsx}）fnmatch 判断不了，按选中算
+            return is_dir or not g or "{" in g or glob_hit(g, n, rel, False, False)
+
+        if (os.path.isfile(path) and is_secret_file(path)) or (
+                os.path.isdir(path) and env_under([path], picked)):
+            deny("密钥值不能进入模型上下文，Grep 的 content 模式会把 .env、SSH 私钥、.kamal/secrets "
+                 "这类密钥文件的匹配行原样带进来。改用 output_mode files_with_matches 或 count，"
+                 "或用 glob 把密钥文件排出搜索范围。" + SAFE)
+    sys.exit(0)
 
 def grep_prints(name, args, stdin_env, where):
     # 带 -c/-q/-l/-L（rg 的 -L 是跟随符号链接，不算）时只输出计数、退出码或文件名
@@ -200,7 +256,7 @@ def grep_prints(name, args, stdin_env, where):
                     recursive = True
         i += 1
     files = positional if pattern_given else positional[1:]
-    if stdin_env or any(is_env_file(f) for f in files):
+    if stdin_env or any(is_secret_file(f) for f in files):
         return True
     if not (recursive or (rg and unrestricted >= 2)):
         return False
@@ -256,11 +312,11 @@ def prints_secret(seg, depth, where):
     if not toks:
         return False
     name, args = os.path.basename(toks[0]), toks[1:]
-    env_in = any(is_env_file(f) for f in redirected)
+    env_in = any(is_secret_file(f) for f in redirected)
     if name in READERS or (name in ("sed", "gsed") and not any(
             a == "--in-place" or a.startswith("--in-place=") or
             (a.startswith("-") and not a.startswith("--") and "i" in a) for a in args)):
-        return env_in or any(is_env_file(a) for a in args if not a.startswith("-"))
+        return env_in or any(is_secret_file(a) for a in args if not a.startswith("-"))
     if name in GREPS:
         return grep_prints(name, args, env_in, where)
     if name in SHELLS or name == "eval":
@@ -394,7 +450,8 @@ def scan(cmd, depth, where):
                for body in inner for x in split_cmd(body))
 
 if scan(cmd, 0, cwd):
-    deny("密钥值不能进入模型上下文，这条命令会把 .env 文件内容或密钥类环境变量的值打印出来。" + SAFE)
+    deny("密钥值不能进入模型上下文，这条命令会把 .env、SSH 私钥、.kamal/secrets 这类密钥文件的内容"
+         "或密钥类环境变量的值打印出来。" + SAFE)
 sys.exit(0)
 ' 2>/dev/null
 exit 0

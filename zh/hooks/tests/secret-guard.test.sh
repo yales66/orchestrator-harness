@@ -7,6 +7,8 @@ PASS=0; FAIL=0
 # clean 只有样例、.git 与 node_modules 里的 .env；big 的同一层目录超过遍历上限
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+# 拒绝时钩子会追加一行到拒绝日志；测试一律写到临时目录，不碰真实日志
+export PERMISSION_DENIED_LOG="$TMP/state/denied.jsonl"
 mkdir -p "$TMP/proj/src" "$TMP/nested/src/config" "$TMP/clean/src" "$TMP/clean/.git" \
          "$TMP/clean/node_modules/pkg" "$TMP/big/many"
 for f in proj/.env nested/src/config/.env.production clean/.git/.env clean/node_modules/pkg/.env \
@@ -16,6 +18,10 @@ done
 for f in proj/src/app.py nested/src/app.py clean/src/app.py clean/.env.example; do
   echo 'print(1)' > "$TMP/$f"
 done
+# SSH 与 Kamal 密钥夹具：home/.ssh 下私钥、公钥与 config；kproj 只在 .kamal 下有 secrets
+mkdir -p "$TMP/home/.ssh" "$TMP/kproj/.kamal" "$TMP/kproj/src"
+for f in home/.ssh/id_ed25519 kproj/.kamal/secrets.local; do echo 'FAKE_PRIVATE=x' > "$TMP/$f"; done
+for f in home/.ssh/id_ed25519.pub home/.ssh/config kproj/src/app.py; do echo 'print(1)' > "$TMP/$f"; done
 D="$TMP/big/many" python3 -c 'import os; [open(os.path.join(os.environ["D"], "f%d" % i), "w").close() for i in range(20001)]'
 
 # bash_json <命令> [cwd] / read_json <路径> —— 造 PreToolUse 输入，命令原文不经 shell 转义；
@@ -25,6 +31,16 @@ bash_json() {
 }
 read_json() {
   V="$1" python3 -c 'import json,os; print(json.dumps({"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":os.environ["V"]}}))'
+}
+
+# grep_json <path> <output_mode> [glob] —— 造 Grep 工具的 PreToolUse 输入，path 空串即缺省（用 cwd）
+grep_json() {
+  P="$1" M="$2" G="${3-}" CWD="$TMP/clean" python3 -c '
+import json, os
+ti = {"pattern": "KEY", "output_mode": os.environ["M"]}
+if os.environ["P"]: ti["path"] = os.environ["P"]
+if os.environ["G"]: ti["glob"] = os.environ["G"]
+print(json.dumps({"hook_event_name":"PreToolUse","tool_name":"Grep","cwd":os.environ["CWD"],"tool_input":ti}))'
 }
 
 # check <期望 deny|allow> <描述> <hook 输入 JSON>
@@ -215,6 +231,9 @@ allow_cmd 'env FOO=1 npm test'
 allow_cmd 'env -u DEBUG python app.py'
 allow_cmd 'export FOO=bar'
 allow_cmd 'set -euo pipefail'
+# 只列变量名；env | cut -d= -f1 遇到多行值会把续行原样打出，仍拒绝
+allow_cmd 'compgen -e'
+deny_cmd  'env | cut -d= -f1'
 
 echo "── Bash: git 操作里的 .env 字样放行 ──"
 allow_cmd 'git status'
@@ -250,6 +269,60 @@ deny_cmd  $'sh <<EOF\nprintenv\nEOF'
 # 双引号里的反引号会执行
 # shellcheck disable=SC2016
 deny_cmd  'git commit -m "document the `env` block"'
+
+echo "── SSH 私钥与 Kamal secrets 同样是密钥文件 ──"
+check deny  "Read ~/.ssh 私钥"           "$(read_json "$TMP/home/.ssh/id_ed25519")"
+check deny  "Read ~/.ssh/*.key"           "$(read_json "$HOME/.ssh/ssh-key-2026-07-08.key")"
+check deny  "Read .kamal/secrets.local"   "$(read_json /repo/.kamal/secrets.local)"
+check deny  "Read .kamal/secrets"         "$(read_json /repo/.kamal/secrets)"
+check allow "Read ~/.ssh 公钥"           "$(read_json "$TMP/home/.ssh/id_ed25519.pub")"
+check allow "Read ~/.ssh/config"          "$(read_json "$HOME/.ssh/config")"
+check allow "Read ~/.ssh/known_hosts"     "$(read_json "$HOME/.ssh/known_hosts")"
+check allow "Read .kamal/hooks 下普通文件""$(read_json /repo/.kamal/hooks/pre-deploy)"
+deny_cmd  'cat ~/.ssh/id_ed25519'
+deny_cmd  'head -3 $HOME/.ssh/id_rsa'
+deny_cmd  'cat .kamal/secrets.local'
+deny_cmd  'base64 ~/.ssh/ssh-key-2026-07-08.key'
+deny_in   kproj 'grep -r FAKE .'
+deny_in   home  'grep -rn FAKE .'
+allow_cmd 'cat ~/.ssh/id_ed25519.pub'
+allow_cmd 'ssh-keygen -lf ~/.ssh/id_ed25519.pub'
+allow_cmd 'ssh -i ~/.ssh/ssh-key-2026-07-08.key ubuntu@161.33.234.18 uptime'
+allow_cmd 'cat ~/.ssh/config'
+allow_in  kproj 'grep -r FAKE src'
+allow_in  kproj 'ls -la .kamal'
+
+echo "── Grep 工具：content 模式搜到密钥文件拒绝，只报文件名或计数放行 ──"
+check deny  "Grep content 指向 .env"            "$(grep_json "$TMP/proj/.env" content)"
+check deny  "Grep content 搜含 .env 的目录"     "$(grep_json "$TMP/proj" content)"
+check deny  "Grep content 搜深层 .env.production" "$(grep_json "$TMP/nested" content)"
+check deny  "Grep content glob 指向 .env*"      "$(grep_json "$TMP/nested" content '**/.env*')"
+check deny  "Grep content 搜 .kamal"            "$(grep_json "$TMP/kproj" content)"
+check deny  "Grep content 相对路径按 cwd 解析"  "$(grep_json ../proj content)"
+check deny  "Grep content 花括号 glob 按命中算" "$(grep_json "$TMP/proj" content '*.{env,py}')"
+check allow "Grep files_with_matches 搜含 .env 的目录" "$(grep_json "$TMP/proj" files_with_matches)"
+check allow "Grep 缺省 output_mode"            "$(grep_json "$TMP/proj" '')"
+check allow "Grep count 指向 .env"              "$(grep_json "$TMP/proj/.env" count)"
+check allow "Grep content glob 排除 .env"       "$(grep_json "$TMP/proj" content '*.py')"
+check allow "Grep content 搜无 .env 的目录"     "$(grep_json "$TMP/clean" content)"
+check allow "Grep content 缺省 path（cwd 是 clean）" "$(grep_json '' content)"
+check allow "Grep content 指向 .env.example"    "$(grep_json "$TMP/clean/.env.example" content)"
+
+echo "── 拒绝写一行到拒绝日志，放行不写 ──"
+rm -f "$PERMISSION_DENIED_LOG"
+printf '%s' "$(bash_json 'ls -la')" | bash "$HOOK" >/dev/null 2>&1
+[ ! -s "$PERMISSION_DENIED_LOG" ] && { PASS=$((PASS+1)); echo "  ✅ 放行不写日志"; } || { FAIL=$((FAIL+1)); echo "  ❌ 放行不应写日志"; }
+printf '%s' "$(bash_json 'cat .env')" | bash "$HOOK" >/dev/null 2>&1
+got=$(python3 -c '
+import json, sys
+try:
+    r = [json.loads(l) for l in open(sys.argv[1], encoding="utf-8")]
+    print(len(r), r[-1]["reason"], r[-1]["source"], r[-1]["tool_name"], r[-1]["target"])
+except Exception as e:
+    print("ERR", e)' "$PERMISSION_DENIED_LOG")
+[ "$got" = "1 hook:secret-guard hook:secret-guard Bash cat .env" ] && { PASS=$((PASS+1)); echo "  ✅ 拒绝写一行（reason/source/tool_name/target）"; } || { FAIL=$((FAIL+1)); echo "  ❌ 日志行不对: $got"; }
+out=$(printf '%s' "$(bash_json 'cat .env')" | PERMISSION_DENIED_LOG=/dev/null/nope/x.jsonl bash "$HOOK" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["hookSpecificOutput"]["permissionDecision"])' 2>/dev/null)
+[ "$out" = deny ] && { PASS=$((PASS+1)); echo "  ✅ 日志不可写仍照常拒绝"; } || { FAIL=$((FAIL+1)); echo "  ❌ 日志不可写时应仍拒绝，得 $out"; }
 
 echo "── 输入异常必须 fail-open ──"
 check allow "非 JSON 输入" 'not json at all'

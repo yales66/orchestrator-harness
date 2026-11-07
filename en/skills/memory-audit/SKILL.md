@@ -12,18 +12,27 @@ A memory deserves to exist if and only if it can answer: **which specific future
 Five cases that condemn a memory; check each one in turn:
 
 1. The fact can be looked up in the repository on the spot (code, git log, docs/adr, CI configuration, package.json).
-2. The rule is already in CLAUDE.md or in some skill.
+2. The rule is already in the global or project CLAUDE.md, the orchestrator playbook or some skill.
 3. The state it describes no longer holds (shipped, retired, superseded, to-do completed), and deleting it loses nothing that still constrains future actions.
 4. The **whole entry** is a log of "what was done" (process narrative, what was done on some day); a session reference appearing in a single sentence does not condemn it.
 5. It says the same thing as another entry. **The merge criterion is "will be read at the same moment"**, not topical similarity; if four entries have to be read at the same moment, they should be one.
 
-For entries that are kept but verbose (over about 3000 characters), give a separate compression target: cut process narrative, comparison figures from closed cases, and rulings already recorded in an ADR (architecture decision record); keep pitfalls and constraints.
+For entries that are kept but verbose (over about 3000 characters), give a separate compression target: cut process narrative, comparison figures from closed cases, and rulings already recorded in an ADR (architecture decision record); keep pitfalls and constraints; user words and rejected text copied verbatim are not compressed.
 
 The `description` field is for judging relevance, not a summary of the content; the body may give the reason behind it (the incident or ruling that produced it), but not a pointer to the session it came from (such as "this session", "last conversation", a session id).
 
 ## Two layers of size, counted separately
 
 The index `MEMORY.md` is paid for by every session and by **every subagent** (measured in 2026-09: a subagent loads both CLAUDE.md files and MEMORY.md, contrary to what the official documentation says; to re-test, dispatch a haiku and ask it only whether a distinctive string from the index is in its context), while memory bodies are paid for only when read. The gain from compressing the index is multiplied by the number of dispatches; the gain from compressing bodies is realised only on a hit. Compress the index first.
+
+## Where it belongs
+
+Knowledge unrelated to the project does not hang under a single project's memory; route it by whether it changes a runtime action:
+
+1. A rule that changes some future action goes into the global rule layer per rule-file-editing: what every session (subagents included) needs goes into `~/.claude/CLAUDE.md`, what binds only main-thread orchestration goes into `~/.claude/orchestrator-playbook.md`, and a skill's procedural practice goes into that skill's SKILL.md.
+2. What serves only as evidence and record and changes no action (measurement records, research conclusions, the sources of rules) goes into a global evidence archive you maintain yourself outside project memory, without memory's three fields.
+
+Before writing a new memory, decide where it belongs the same way; only what concerns this project alone goes into project memory. When an audit finds a project-unrelated rule in project memory, route it as above, then delete the project copy under condemning case 2 and keep the project-specific part.
 
 ## Procedure
 

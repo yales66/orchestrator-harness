@@ -111,12 +111,13 @@ if mark:
         pass
 
 if reblock:
-    reason = ("主线程 context 过硬线后又涨了 %g 个点。现在就用 handoff 技能落盘交接"
-              "(就近放在本任务的工作目录),把未完成的步骤写进 ③,并提示用户换新会话。" % REDELTA)
+    reason = ("主线程 context 过硬线后又上涨了。现在就用 handoff 技能落盘交接"
+              "(就近放在本任务的工作目录),把未完成的步骤写进 ③,"
+              "生成交接后按 handoff 技能第 4 步接力。")
 else:
     reason = ("主线程 context 已过硬线。剩下的事靠已有上下文能做完就做完;接下来要读新材料、"
-              "做新判断的大块工作时,先用 handoff 技能落盘交接(就近放在本任务的工作目录)"
-              "并提示用户换新会话。")
+              "做新判断的大块工作时,先用 handoff 技能落盘交接(就近放在本任务的工作目录),"
+              "生成交接后按 handoff 技能第 4 步接力。")
 reason += "（transcript: %s）" % tp
 print(json.dumps({"decision": "block", "reason": reason}))
 sys.exit(0)
