@@ -155,7 +155,7 @@
           },
           {
             "type": "command",
-            "command": "bash $HOME/.claude/hooks/keepalive-gate.sh",
+            "command": "REPLY_LANG=zh bash $HOME/.claude/hooks/keepalive-gate.sh",
             "asyncRewake": true,
             "timeout": 3300
           }

@@ -18,8 +18,9 @@ STATUS_RE = re.compile(r"^[\s`*_]*状态[:：]\s*(完成|待答|交接)")
 LAST_MESSAGE_MAX = 1500
 EVENTS = {"SessionStart": "start", "Stop": "stop", "SessionEnd": "end"}
 UNDECLARED = "未声明"
-# 保活钩子要轨道交接或做完后只回这几种字；这一轮不算新声明，沿用同一会话上一轮的状态
-KEEPALIVE_REPLIES = {"完", ".", "。"}
+# 保活钩子要轨道交接或做完后只回这几种字（「完」为中文安装、done 为英文安装，比较时去掉句末句点、不分大小写）；
+# 这一轮不算新声明，沿用同一会话上一轮的状态
+KEEPALIVE_REPLIES = {"完", ".", "。", "done"}
 USAGE_KEYS = ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")
 # Claude Code 每 100 毫秒才把 transcript 写队列落盘一次，Stop 钩子起跑时本轮最后一条 assistant 行常还没写进去
 FLUSH_WAIT = 1.0
@@ -107,7 +108,7 @@ def handle(payload, env, now=now_iso, sleep=time.sleep):
         message = given
     line, status = status_of(message, event)
     path = os.path.join(state, f"{track}.status.json")
-    if event == "stop" and status == UNDECLARED and message.strip() in KEEPALIVE_REPLIES:
+    if event == "stop" and status == UNDECLARED and (message.strip() in KEEPALIVE_REPLIES or message.strip().rstrip(".。").lower() in KEEPALIVE_REPLIES):
         prev = previous_status(path)
         if prev.get("session_id") == payload.get("session_id") and prev.get("status") not in (None, UNDECLARED):
             line, status, message = prev.get("status_line", ""), prev["status"], prev.get("last_message", "")

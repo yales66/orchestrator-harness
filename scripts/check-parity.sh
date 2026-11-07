@@ -9,9 +9,10 @@
 #    byte-identical in the two copies, because the README states that the hook
 #    and skill scripts are identical.
 # 3. settings.example.json registers the same hooks in both copies. The one
-#    allowed difference is the REPLY_LANG=zh prefix on zh/'s reply-gate
-#    command, which switches on the gate's reply-language check for a Chinese
-#    install; with that prefix removed the two files are byte-identical.
+#    allowed difference is the REPLY_LANG=zh prefix on zh/'s reply-gate and
+#    keepalive commands, which switches on the gate's reply-language check and
+#    the keepalive's Chinese stop word 「完」 for a Chinese install; with that
+#    prefix removed the two files are byte-identical.
 #
 # Run from anywhere: bash scripts/check-parity.sh
 set -euo pipefail

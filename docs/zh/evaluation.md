@@ -8,7 +8,7 @@
 
 | 主张 | 证据 | 在仓库根目录复跑 |
 |---|---|---|
-| 钩子的行为与 README 描述一致 | 17 个测试文件，每个副本 872 个用例，全部通过；持续集成在 Ubuntu 与 macOS 上对两份副本都跑一遍 | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
+| 钩子的行为与 README 描述一致 | 17 个测试文件，每个副本 878 个用例，全部通过；持续集成在 Ubuntu 与 macOS 上对两份副本都跑一遍 | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
 | `en/` 与 `zh/` 是一致的两份副本 | 一致性检查比对两边的文件清单，并要求钩子、测试与代理定义逐字节相同 | `bash scripts/check-parity.sh` |
 | 编排手册只送达主线程 | SessionStart 钩子的测试逐字节核对注入的文本与编排手册；静态测量在 H 组主线程的会话记录里找到编排手册，在子智能体的会话记录里找不到 | `bash en/hooks/tests/orchestrator-playbook-session-start.test.sh` 与 `bash eval/static-context/run.sh` |
 | 编排手册不放进 `CLAUDE.md`，每个子智能体的首次请求输入都变小 | H 组 10,186 词元，N 组 13,529 词元，少 3,343 词元，约 25% | `bash eval/static-context/run.sh` |

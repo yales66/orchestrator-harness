@@ -221,8 +221,8 @@ def _stop(state, text, session="sid-1"):
 
 
 def test_keepalive_reply_keeps_the_declared_status_of_the_same_session():
-    # 保活钩子在轨道交接后要它只回「完」或句点；这一轮不能盖掉上一轮声明的交接，否则父会话一直当它在跑
-    for reply in ("完", ".", "。", " 完 \n"):
+    # 保活钩子在轨道交接后要它只回「完」（英文安装为 Done）或句点；这一轮不能盖掉上一轮声明的交接，否则父会话一直当它在跑
+    for reply in ("完", ".", "。", " 完 \n", "Done", "done.", " Done \n"):
         state = _state()
         _stop(state, "状态：交接 /a/HANDOFF.md\n细节")
         _stop(state, reply)

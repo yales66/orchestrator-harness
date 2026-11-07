@@ -80,8 +80,8 @@ from datetime import datetime
 
 MARK = "[保活]"
 HANDOFF_MARK = "最后一次保活"   # 最后一次唤醒提示里的字样，唤醒消息进 transcript 后据此认出已发过
-DONE_REPLY = "完"              # 句点唤醒提示里约定的回复：任务已做完
-DONE_STRIP = " \t\n「」。."       # 模型可能把提示里的引号、句末标点一起照抄
+DONE_REPLIES = {"完", "done"}  # 句点唤醒提示里约定的回复：中文安装为「完」，英文安装为 Done；两个都认，比较时不分大小写
+DONE_STRIP = " \t\n「」。.\"\x27“”"  # 模型可能把提示里的引号、句末标点一起照抄
 THRESHOLD = 150000
 MAX_IDLE = 8 * 3600
 # 子智能体回报、另一会话的消息、后台通知（保活唤醒也包成后台通知进 transcript）都以用户角色进
@@ -152,7 +152,7 @@ def scan():
             if m.get("role") == "assistant":
                 reply = text_of(m.get("content"))   # 只含 thinking 或工具调用的续行为 None
                 if in_wake and reply is not None:
-                    done = reply.strip(DONE_STRIP) == DONE_REPLY
+                    done = reply.strip(DONE_STRIP).lower() in DONE_REPLIES
                 u = m.get("usage")
                 if isinstance(u, dict):
                     t = (u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0) + \
@@ -285,8 +285,11 @@ if not kids and scan()[4]:     # 保活回合的「完」常在钩子起跑读 t
     sys.exit(0)
 sys.exit(3 if final else 2)
 ' 2>/dev/null
-case $? in
-  2) printf '%s' '[保活] 只回复一个句点，不做别的；下列任一成立时，改为只回一个「完」字，不带别的字：A. 本会话的任务已做完，没有待用户答复的问题，也没有在跑的后台任务或子智能体。B. 本会话已用 handoff 技能写出交接文件，把剩余工作交给别的会话：剩余工作、待用户答复的问题和仍在跑的任务都已写进交接文件，写完之后本会话没有新进展（交接里已登记的任务发来完成通知不算新进展）。' >&2; exit 2 ;;
+rc=$?
+# 约定的停止词随安装语言：REPLY_LANG=zh（中文安装）回「完」，其余回 Done
+if [ "${REPLY_LANG:-}" = zh ]; then done_word='「完」字'; else done_word=' Done'; fi
+case $rc in
+  2) printf '%s%s%s' '[保活] 只回复一个句点，不做别的；下列任一成立时，改为只回一个' "$done_word" '，不带别的字：A. 本会话的任务已做完，没有待用户答复的问题，也没有在跑的后台任务或子智能体。B. 本会话已用 handoff 技能写出交接文件，把剩余工作交给别的会话：剩余工作、待用户答复的问题和仍在跑的任务都已写进交接文件，写完之后本会话没有新进展（交接里已登记的任务发来完成通知不算新进展）。' >&2; exit 2 ;;
   3) printf '%s' '[保活] 用户已离开近 8 小时，这是最后一次保活。本回合不做提交、推送、开 PR、合并等收尾，也不重新提问，按第一条成立的做完就结束：A. 还有要新会话接着做的实质工作，或有待用户答复的问题（不论答复后剩什么）：用 handoff 技能交接，走完该技能的全部步骤。B. 剩下的只有收尾（提交、推送、开 PR、合并、在跑任务回报后收尾），可夹带用户本人要做的事：在本任务的进度源末尾追加一节，逐条写剩下的动作和各自的核对命令，在跑任务写明产物路径，用户本人要做的事一并写进（没有进度源就在工作目录新建只追加的 PROGRESS.md），然后回一个句点。C. 任务已做完，或剩下的只有用户本人能做、做完后不用会话接着做的事（如人工登录、人工审核），或已有的交接或计划文件已写全剩余工作且之后没有新进展：只回一个句点。' >&2; exit 2 ;;
 esac
 exit 0

@@ -5,6 +5,9 @@ HOOK="$(dirname "$0")/../keepalive-gate.sh"
 PASS=0; FAIL=0
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+# 大部分用例按中文安装跑（唤醒提示里约定回「完」）；末尾一组不设 REPLY_LANG，按英文安装跑（约定回 Done）
+export REPLY_LANG=zh
+WAKE_PROMPT_EN='[保活] 只回复一个句点，不做别的；下列任一成立时，改为只回一个 Done，不带别的字：A. 本会话的任务已做完，没有待用户答复的问题，也没有在跑的后台任务或子智能体。B. 本会话已用 handoff 技能写出交接文件，把剩余工作交给别的会话：剩余工作、待用户答复的问题和仍在跑的任务都已写进交接文件，写完之后本会话没有新进展（交接里已登记的任务发来完成通知不算新进展）。'
 WAKE_PROMPT='[保活] 只回复一个句点，不做别的；下列任一成立时，改为只回一个「完」字，不带别的字：A. 本会话的任务已做完，没有待用户答复的问题，也没有在跑的后台任务或子智能体。B. 本会话已用 handoff 技能写出交接文件，把剩余工作交给别的会话：剩余工作、待用户答复的问题和仍在跑的任务都已写进交接文件，写完之后本会话没有新进展（交接里已登记的任务发来完成通知不算新进展）。'
 HANDOFF_PROMPT='[保活] 用户已离开近 8 小时，这是最后一次保活。本回合不做提交、推送、开 PR、合并等收尾，也不重新提问，按第一条成立的做完就结束：A. 还有要新会话接着做的实质工作，或有待用户答复的问题（不论答复后剩什么）：用 handoff 技能交接，走完该技能的全部步骤。B. 剩下的只有收尾（提交、推送、开 PR、合并、在跑任务回报后收尾），可夹带用户本人要做的事：在本任务的进度源末尾追加一节，逐条写剩下的动作和各自的核对命令，在跑任务写明产物路径，用户本人要做的事一并写进（没有进度源就在工作目录新建只追加的 PROGRESS.md），然后回一个句点。C. 任务已做完，或剩下的只有用户本人能做、做完后不用会话接着做的事（如人工登录、人工审核），或已有的交接或计划文件已写全剩余工作且之后没有新进展：只回一个句点。'
 # 唤醒提示进 transcript 时的样子（Claude Code 包成后台通知）
@@ -35,6 +38,7 @@ SHARD="$TMP/sharding"
 #   summary              Stop 之后 Claude Code 自己写的 stop_hook_summary 与 turn_duration
 #   blob                 Claude Code 2.1.300 起写的 api-request-blob 行：带用户角色的 message、没有时间戳
 #   done:<token>         主线程 assistant，正文只有「完」（保活回合里表示任务已做完）
+#   doneen:<token>       同上，正文只有 Done；doneenq 为 "Done."；notdone 为以 Done 开头的一句话
 #   doneq:<token>        同上，正文照抄成「「完」。」
 mk() {
   local f="$TMP/$1"; shift
@@ -86,6 +90,12 @@ for e in events:
         n += 1; last_id = "msg_%d" % n; asst(v, last_id, text="完")
     elif k == "doneq":
         n += 1; last_id = "msg_%d" % n; asst(v, last_id, text="「完」。")
+    elif k == "doneen":
+        n += 1; last_id = "msg_%d" % n; asst(v, last_id, text="Done")
+    elif k == "doneenq":
+        n += 1; last_id = "msg_%d" % n; asst(v, last_id, text="\"Done.\"")
+    elif k == "notdone":
+        n += 1; last_id = "msg_%d" % n; asst(v, last_id, text="Done with the tests, still open")
     elif k == "blob":
         lines.append({"type": "api-request-blob", "hash": "h%d" % len(lines),
                       "message": {"role": "user", "content": [{"type": "text", "text": "<system-reminder>\nx\n</system-reminder>"}]}})
@@ -184,6 +194,9 @@ wake|非保活回合里回「完」不算||user:0 done:150000
 allow|回「完」带引号和句号也认得||user:1 asst:150000 rewake:0 doneq:150500
 wake|回「完」后用户本人回答选择题，恢复计时||user:2 asst:150000 rewake:1 done:150500 askans:0 asst:151000
 wake|保活回合回「完」后下一次保活回句点，恢复计时||user:1 asst:150000 rewake:0.5 done:150500 rewake:0 asst:151000
+allow|保活回合回 Done 后不再计时||user:1 asst:150000 rewake:0 doneen:150500
+allow|回 Done 带引号和句号也认得||user:1 asst:150000 rewake:0 doneenq:150500
+wake|以 Done 开头的一句话不算||user:1 asst:150000 rewake:0 notdone:150500
 TABLE
 
 echo "── 睡眠期间 transcript 的变化（表驱动：期望|描述|动作） ──"
@@ -207,6 +220,14 @@ t=$(mk "late.jsonl" user:1 asst:150000 rewake:0)
 printf '%s\n' '{"type":"assistant","timestamp":"2020-01-01T00:00:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"完"}]}}' >"$TMP/late-done.jsonl"
 # shellcheck disable=SC2016  # 动作由 verdict 在子 shell 里 eval，变量到那时才展开
 report allow "$(T="$t" verdict "$(payload "$t")" 'cat "$TMP/late-done.jsonl" >>"$T"')" "起跑后才落盘的「完」也停"
+
+echo "── 英文安装（不设 REPLY_LANG）：唤醒提示约定回 Done，回「完」与 Done 都认 ──"
+t=$(mk "en1.jsonl" user:0 asst:150000)
+report wake "$(unset REPLY_LANG; WAKE_PROMPT="$WAKE_PROMPT_EN" verdict "$(payload "$t")")" "英文安装的句点唤醒提示约定回 Done"
+t=$(mk "en2.jsonl" user:1 asst:150000 rewake:0 doneen:150500)
+report allow "$(unset REPLY_LANG; WAKE_PROMPT="$WAKE_PROMPT_EN" verdict "$(payload "$t")")" "英文安装回 Done 后不再计时"
+t=$(mk "en3.jsonl" user:1 asst:150000 rewake:0 done:150500)
+report allow "$(unset REPLY_LANG; WAKE_PROMPT="$WAKE_PROMPT_EN" verdict "$(payload "$t")")" "英文安装回「完」也认"
 
 echo "── 最后一次保活写交接 ──"
 # 这一组睡 3 秒、截止 5 秒：mk 的时间戳截到整秒，睡眠周期要比这 1 秒抖动长得多才分得清边界
