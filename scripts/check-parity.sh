@@ -65,16 +65,36 @@ if [ -f "$ROOT/en/$SETTINGS" ] && [ -f "$ROOT/zh/$SETTINGS" ]; then
   fi
 fi
 
-# Claude Code persists SessionStart additionalContext longer than 10,000
-# characters (JavaScript string length) and hands the model only a 2KB preview,
-# so a playbook at or past that length silently stops reaching the main thread.
-MAX_CHARS="${PLAYBOOK_MAX_CHARS:-10000}"
+# Claude Code persists a single hook's SessionStart additionalContext longer
+# than 10,000 characters (JavaScript string length) and hands the model only a
+# 2KB preview; the limit applies to each hook separately. settings.example.json
+# therefore registers the playbook hook once per part (--part 1, 2, ...), and
+# the hook cuts the playbook into parts of at most 9,500 characters. Check that
+# every part is within that size and that the playbook needs no more parts than
+# the settings register, since a part past the last registered one never
+# reaches the main thread.
+MAX_CHARS="${PLAYBOOK_PART_MAX_CHARS:-9500}"
+export PLAYBOOK_PART_DELAY=0
 for lang in en zh; do
-  pb="$ROOT/$lang/orchestrator-playbook.md"
-  [ -f "$pb" ] || continue
-  n="$(python3 -c 'import sys; print(len(open(sys.argv[1], encoding="utf-8").read().encode("utf-16-le")) // 2)' "$pb")"
-  if [ "$n" -gt "$MAX_CHARS" ]; then
-    echo "parity: $lang/orchestrator-playbook.md is $n characters; the SessionStart hook delivers it in full only up to $MAX_CHARS"
+  hook="$ROOT/$lang/hooks/orchestrator-playbook-session-start.sh"
+  settings="$ROOT/$lang/$SETTINGS"
+  [ -f "$hook" ] && [ -f "$settings" ] || continue
+  registered="$(grep -c 'orchestrator-playbook-session-start.sh --part' "$settings" || true)"
+  if ! msg="$(python3 - "$hook" "$registered" "$MAX_CHARS" 2>&1 <<'PY'
+import json, subprocess, sys
+hook, registered, cap = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+def part(i):
+    out = subprocess.run(["bash", hook, "--part", str(i)], capture_output=True, text=True, check=True).stdout
+    return json.loads(out)["hookSpecificOutput"]["additionalContext"] if out.strip() else None
+for i in range(1, registered + 1):
+    ctx = part(i)
+    if ctx is not None and len(ctx.encode("utf-16-le")) // 2 > cap:
+        sys.exit("part %d is %d characters, over %d" % (i, len(ctx.encode("utf-16-le")) // 2, cap))
+if registered == 0 or part(registered + 1) is not None:
+    sys.exit("the playbook needs more parts than the %d the settings register" % registered)
+PY
+)"; then
+    echo "parity: $lang/orchestrator-playbook.md: $msg" >&2
     status=1
   fi
 done
