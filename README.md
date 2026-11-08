@@ -38,25 +38,6 @@ Section 2 of the playbook has the main thread set the model on every dispatch, a
 | Yes-or-no question on a single-element crop in an end-to-end test, such as whether text is clipped, overlapping or illegible | haiku | not set by this repository | always; a problem it reports counts only after opus checks it again |
 | Worker dispatched by a subagent other than `retriever`: summarising test results, checking copy, a yes-or-no question on a single-element crop, a fix suggestion for a mechanical error | haiku, one layer only | not set by this repository | the subagent's brief names the jobs it may hand out and the context cap; the worker gets only paths and the question, and its context stays under 50,000 tokens ([ADR 0025](docs/adr/0025-subagents-may-dispatch-one-layer-of-haiku-workers.md)) |
 
-## What is measured
-
-[docs/evaluation.md](docs/evaluation.md) gives the method and limits of each measurement.
-
-| Experiment | Question | State |
-|---|---|---|
-| [Effort sweep](eval/effort-sweep/README.md) | How do a subagent's quality and cost compare at reasoning effort `medium` and `high`, and on Haiku 5.5 instead of Opus 5.5? | Run in September and October 2026; the routing above follows from it ([ADR 0008](docs/adr/0008-subagent-effort-per-kind-of-dispatch.md), [ADR 0021](docs/adr/0021-implementer-runs-on-haiku-when-tests-decide-every-change.md), [ADR 0022](docs/adr/0022-retriever-runs-on-haiku-when-the-brief-limits-it-to-local-files-or-one-named-page.md), [ADR 0023](docs/adr/0023-implementer-runs-on-haiku-when-tests-decide-including-its-own.md)) |
-| [Rules on missed asks](eval/rules-missed-asks/README.md) | Do the playbook's ask criteria reduce the over-asking that the reply gate misses? | Ran and shelved, because the scores do not measure the rule |
-| [Ask-or-act probe](eval/ask-or-act/README.md) | Does the current playbook make the model ask when it should and act when asking was unnecessary? | Stopped after two trials, because the replay reads the files as they are when it runs rather than as they were in the session |
-| [Gate follow-through](eval/gate-followthrough/README.md) | After the gate blocks a reply that was right to ask about a step, does the model go ahead with that step anyway? | Designed, not run |
-
-| Measurement | Result | Rerun |
-|---|---|---|
-| Hook regression tests | 878 cases in 17 test files per copy pass | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
-| Skill script tests | 124 pytest cases per copy pass, 36 for the handoff scripts and 88 for the feature-sharding scripts | `python3 -m pytest -p no:cacheprovider en/skills/handoff/scripts en/skills/feature-sharding/scripts` |
-| Hook mutation testing, [eval/hook-mutations](eval/hook-mutations/README.md) | on 30 September 2026, the tests killed 54 of 54 injected defects in the nine earliest hooks, and 30 of a held-out set of 35, written from the hook header comments without reading the tests | `bash eval/hook-mutations/run.sh`; the hooks have changed since, so it no longer reproduces these figures |
-| Static context, [eval/static-context](eval/static-context/README.md) | each subagent's first-request input is 10,186 tokens with the playbook injected by the hook against 13,529 with it in `CLAUDE.md` (en/ copy, Claude Code 2.1.286) | `bash eval/static-context/run.sh` |
-| Reply gate replay, [eval/reply-gate-replay](eval/reply-gate-replay/README.md) | over 2,734 final replies written before the gate existed, its closing-offer rule blocks with 68.5% precision and 31.7% recall | `python3 eval/reply-gate-replay/score.py --data "$DATA"`, where `DATA` is the private directory holding the transcripts and labels |
-
 ## Layout
 
 Both language folders mirror `~/.claude/`. The test files are not installed, and `settings.example.json` is merged into `~/.claude/settings.json` rather than copied.
@@ -75,7 +56,7 @@ Both language folders mirror `~/.claude/`. The test files are not installed, and
 
 | Hook | Event | Behaviour | Tests |
 |---|---|---|---|
-| `orchestrator-playbook-session-start.sh` | SessionStart, registered once per part | Injects `orchestrator-playbook.md` into the main thread. With `--part N` it injects only part N, splitting at `## ` headings into parts of at most 9,500 characters, since Claude Code passes a longer hook output to the model only as a preview. Part N waits (N−1)×0.3 seconds so that the parts arrive in order ([ADR 0024](docs/adr/0024-the-playbook-is-injected-in-parts-under-the-per-hook-limit.md)) | `orchestrator-playbook-session-start.test.sh` |
+| `orchestrator-playbook-session-start.sh` | SessionStart, registered once per part | Injects `orchestrator-playbook.md` into the main thread. With `--part N` it injects only part N, splitting at `## ` headings into parts of at most 9,500 characters. Part N waits (N−1)×0.3 seconds so that the parts arrive in order ([ADR 0024](docs/adr/0024-the-playbook-is-injected-in-parts-under-the-per-hook-limit.md)) | `orchestrator-playbook-session-start.test.sh` |
 | `block-nested-subagent.sh` | PreToolUse on `Agent\|Task\|Workflow` | Inside a subagent, allows an `Agent` or `Task` call only when its model is haiku, and denies every other dispatch and every workflow; `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=2` keeps those workers from dispatching further. The main thread and a session started with `--agent` are not restricted | `block-nested-subagent.test.sh` |
 | `block-no-verify-commit.sh` | PreToolUse on `Bash` | Denies `git commit --no-verify` and `git commit -n`, so a `commit-msg` hook you have configured always runs | `block-no-verify-commit.test.sh` |
 | `context-watermark-gate.sh` | Stop | Reads the context usage from the session transcript. Past 35% of the context window it adds a reminder once; at 40% it blocks once, and the main thread finishes the wrap-up its context covers or, with a new large block of work next, hands off through the handoff skill. After that it blocks again at every further rise of 5 percentage points and asks for the handoff at once. Without a session scratchpad it reminds and blocks on every turn. The window defaults to 1,000,000 tokens; `CONTEXT_WINDOW_TOKENS`, `CONTEXT_WARN_PCT`, `CONTEXT_HARD_PCT` and `CONTEXT_REBLOCK_DELTA_PCT`, set as a prefix on the hook's command, override the window and the three thresholds | `context-watermark-gate.test.sh` |
@@ -100,7 +81,7 @@ Both language folders mirror `~/.claude/`. The test files are not installed, and
 | `rule-file-editing` | Discipline for editing `CLAUDE.md`, `SKILL.md` and other instruction files: judge each change by how it alters runtime behaviour, write exceptions as branches, and send deletions and new rule files to an independent reviewer |
 | `memory-audit` | Decides which Claude Code memory entries to keep, merge or delete, and rebuilds the index |
 | `handoff` | Generates `HANDOFF.md` whole. The main thread writes `HANDOFF.new.md` from its own context, `scripts/extract.py` pulls every message the user sent and the git state into `.handoff-archive/material/`, and `scripts/finalize.sh` puts the new file in place and archives the old one ([ADR 0026](docs/adr/0026-the-main-thread-writes-the-handoff-itself.md)). It then relays: when every open item waits on the user, it gives them the handoff path and a start instruction; otherwise it launches a relay session in a new Ghostty window through feature-sharding's `launch_tracks.py`, which needs macOS and Ghostty, and gives the user the path when the launch fails. When a type B question waits on the user with a large block of work after it, the session first finishes the work that does not depend on the answer and sets a wake-up 50 minutes out, before the one-hour prompt cache expires |
-| `feature-sharding` | Plans multi-module work that may not fit the main thread's remaining budget: it routes by measured budget and seams, bins the work by size, and either dispatches subagents in waves in the current session or launches each track with `scripts/spawn_tracks.py` as a `claude --bg -w` background session in its own worktree. The planning session stays on as the parent: it waits on the tracks with `wait_tracks.py`, answers their questions, relays them and merges them in order ([ADR 0028](docs/adr/0028-sharding-tracks-run-as-background-sessions-under-the-planning-session.md)). The user approves the launch checklist first only when a track needs credentials or a paid allowance. It needs a Claude Code version with background sessions (`claude --bg`) |
+| `feature-sharding` | Plans multi-module work that may not fit the main thread's remaining budget: it routes by measured budget and seams, bins the work by size, and either dispatches subagents in waves in the current session or launches each track with `scripts/spawn_tracks.py` as a `claude --bg -w` background session in its own worktree. The planning session stays on as the parent: it waits on the tracks with `wait_tracks.py`, answers their questions, launches a relay session when a track hands off, and merges the tracks in order ([ADR 0028](docs/adr/0028-sharding-tracks-run-as-background-sessions-under-the-planning-session.md)). The user approves the launch checklist first only when a track needs credentials or a paid allowance. It needs a Claude Code version with background sessions (`claude --bg`) |
 | `grilling` | Questions the user round by round about a plan or decision until both share one understanding. Before each round it classes every open decision as the playbook does and asks only the type B questions, each with a recommended answer. Adapted from [mattpocock/skills](https://github.com/mattpocock/skills) |
 
 ## Install
@@ -113,7 +94,7 @@ Install the en/ copy of this repository into ~/.claude, following the Install se
 
 Ask for `zh/` instead to get the Chinese copy. The steps below are written for the Claude session that carries out the install, and it follows them in order:
 
-1. Tell the user that this release was tested on Claude Code 2.1.319 and needs a version that provides `asyncRewake` hooks, the PermissionDenied and SessionEnd hook events, and `scratchpad_dir` in the hook input. Check that `bash`, `python3`, `jq` and `git` are on `PATH`, and tell the user about any missing one before copying anything: without `python3` or `jq` the hooks exit without a decision, so every call goes through unchecked.
+1. Tell the user that this release was tested on Claude Code 2.1.319 and needs a version that provides `asyncRewake` hooks, the PermissionDenied and SessionEnd hook events, and `scratchpad_dir` in the hook input. Check that `bash`, `python3`, `jq` and `git` are on `PATH`, and tell the user about any missing one before copying anything: without `python3` the hooks exit without a decision, so every call goes through unchecked, and without `jq` the rule-file reminder and the worktree symlinks stop working.
 2. Take the source files from the copy the user named, `en/` or `zh/`, and ask when the request names neither.
 3. Before overwriting any file that already exists under `~/.claude/`, `settings.json` included, copy it to a backup location and tell the user where the backups are.
 4. Copy `hooks/*.sh` into `~/.claude/hooks/` without `hooks/tests/`, copy each directory under `skills/` into `~/.claude/skills/` without the test files `skills/*/scripts/test_*.py`, copy `agents/*.md` into `~/.claude/agents/`, and copy `orchestrator-playbook.md` into `~/.claude/`, directly above `hooks/`, where the SessionStart hook looks for it.
@@ -190,14 +171,8 @@ bash scripts/ci-local.sh
 | [Evaluation: method and limits](docs/evaluation.md) | What the harness claims, what it does not, and what a controlled experiment would cost |
 | [Static context measurement](eval/static-context/README.md) | How to run the measurement and what each configuration installs |
 | [Hook mutation testing](eval/hook-mutations/README.md) | How injected defects measure the hook tests, and the held-out set |
-| [Reply gate replay](eval/reply-gate-replay/README.md) | How the reply gate was replayed over past sessions and scored against labels from an agent that did not see the gate's output but knew its phrase list |
+| [Reply gate replay](eval/reply-gate-replay/README.md) | How the reply gate was replayed over past sessions and scored |
 
 ## License
 
 MIT. See `LICENSE`. `skills/grilling` in each copy is adapted from [mattpocock/skills](https://github.com/mattpocock/skills), released under MIT with copyright held by its original author; see the `LICENSE` in that directory.
-
-## Data sources
-
-| Figures | Source |
-|---|---|
-| Prompt token accounting (input plus cache creation plus cache read) | Anthropic prompt caching documentation, https://platform.claude.com/docs/en/build-with-claude/prompt-caching |

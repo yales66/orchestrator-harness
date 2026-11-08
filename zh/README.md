@@ -38,25 +38,6 @@
 | 端到端测试里针对单个元素截图的是非题，例如文字是否被截断、重叠或看不清 | haiku | 本仓库未设定 | 总是；它报告的问题要经 opus 复核才算数 |
 | `retriever` 以外的子智能体派出的工人：汇总测试结果、核对文案、单个元素截图的是非题、机械错误的修复建议 | haiku，只有一层 | 本仓库未设定 | 子智能体的派发说明写明它可以外派哪些活与上下文上限；工人只拿到路径与问题，上下文控制在 50,000 词元以内（[ADR 0025](../docs/zh/adr/0025-subagents-may-dispatch-one-layer-of-haiku-workers.md)） |
 
-## 测量了什么
-
-[docs/zh/evaluation.md](../docs/zh/evaluation.md) 说明每项测量的方法与局限。
-
-| 实验 | 要回答的问题 | 状态 |
-|---|---|---|
-| [推理强度对比](../eval/effort-sweep/README.md) | 子智能体在推理强度 `medium` 与 `high` 下、以及换用 Haiku 5.5 代替 Opus 5.5 时，质量与花费相比如何？ | 于 2026 年 9 月与 10 月运行；上一节的派发由此定下（[ADR 0008](../docs/zh/adr/0008-subagent-effort-per-kind-of-dispatch.md)、[ADR 0021](../docs/zh/adr/0021-implementer-runs-on-haiku-when-tests-decide-every-change.md)、[ADR 0022](../docs/zh/adr/0022-retriever-runs-on-haiku-when-the-brief-limits-it-to-local-files-or-one-named-page.md)、[ADR 0023](../docs/zh/adr/0023-implementer-runs-on-haiku-when-tests-decide-including-its-own.md)） |
-| [漏拦请示](../eval/rules-missed-asks/README.md) | 编排手册里的请示判据能否减少回复出口漏掉的过度请示？ | 跑过之后已搁置，因为得分测不到这条规则 |
-| [请示判断探针](../eval/ask-or-act/README.md) | 现行手册能否让模型该问时问、问了也多余时直接做？ | 做过两次试跑后停止，因为回放读到的是运行回放时的文件而不是会话当时的 |
-| [拦截后跟进](../eval/gate-followthrough/README.md) | 回复出口拦下一条本该请示的回复之后，模型会不会照样去做那一步？ | 已设计、未运行 |
-
-| 测量 | 结果 | 复跑 |
-|---|---|---|
-| 钩子回归测试 | 每个副本 17 个测试文件共 878 个用例全部通过 | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
-| 技能脚本测试 | 每个副本 124 个 pytest 用例全部通过，其中交接脚本 36 个，feature-sharding 脚本 88 个 | `python3 -m pytest -p no:cacheprovider en/skills/handoff/scripts en/skills/feature-sharding/scripts` |
-| 钩子变异测试，[eval/hook-mutations](../eval/hook-mutations/README.md) | 2026 年 9 月 30 日，往最早的 9 个钩子里植入的 54 个缺陷，测试抓住了全部 54 个；只照钩子头注释、不看测试写出的 35 个留出集缺陷，测试抓住 30 个 | `bash eval/hook-mutations/run.sh`；钩子此后改过，已复现不出这些数字 |
-| 静态上下文，[eval/static-context](../eval/static-context/README.md) | 编排手册经钩子注入时，每个子智能体的首次请求输入是 10,186 词元，写进 `CLAUDE.md` 时是 13,529 词元（en/ 副本，Claude Code 2.1.286） | `bash eval/static-context/run.sh` |
-| 回复出口回放，[eval/reply-gate-replay](../eval/reply-gate-replay/README.md) | 在回复出口上线前写成的 2,734 条收尾回复上，它的收尾提议规则精确率 68.5%，召回率 31.7% | `python3 eval/reply-gate-replay/score.py --data "$DATA"`，其中 `DATA` 是存放会话记录与标注的私有目录 |
-
 ## 目录结构
 
 两个语言文件夹的布局都对应 `~/.claude/`。测试文件不安装，`settings.example.json` 要合并进 `~/.claude/settings.json` 而不是直接复制。
@@ -75,7 +56,7 @@
 
 | 钩子 | 事件 | 行为 | 测试 |
 |---|---|---|---|
-| `orchestrator-playbook-session-start.sh` | SessionStart，按段各注册一次 | 把 `orchestrator-playbook.md` 注入主线程。带 `--part N` 时只注入第 N 段，在 `## ` 节标题处切成每段不超过 9,500 个字符的几段，因为钩子输出更长时 Claude Code 只把预览交给模型。第 N 段先等 (N−1)×0.3 秒再输出，让各段按序送达（[ADR 0024](../docs/zh/adr/0024-the-playbook-is-injected-in-parts-under-the-per-hook-limit.md)） | `orchestrator-playbook-session-start.test.sh` |
+| `orchestrator-playbook-session-start.sh` | SessionStart，按段各注册一次 | 把 `orchestrator-playbook.md` 注入主线程。带 `--part N` 时只注入第 N 段，在 `## ` 节标题处切成每段不超过 9,500 个字符的几段。第 N 段先等 (N−1)×0.3 秒再输出，让各段按序送达（[ADR 0024](../docs/zh/adr/0024-the-playbook-is-injected-in-parts-under-the-per-hook-limit.md)） | `orchestrator-playbook-session-start.test.sh` |
 | `block-nested-subagent.sh` | PreToolUse，匹配 `Agent\|Task\|Workflow` | 在子智能体内只放行模型为 haiku 的 `Agent` 或 `Task` 调用，其余派发与所有工作流一律拒绝；`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=2` 让这些工人不能再往下派。主线程与用 `--agent` 启动的会话都不受限 | `block-nested-subagent.test.sh` |
 | `block-no-verify-commit.sh` | PreToolUse，匹配 `Bash` | 拒绝 `git commit --no-verify` 与 `git commit -n`，确保用户自己配置的 `commit-msg` 钩子总会运行 | `block-no-verify-commit.test.sh` |
 | `context-watermark-gate.sh` | Stop | 从会话记录读取上下文用量。用量过上下文窗口的 35% 时提醒一次；过 40% 时拦一次，主线程把已有上下文能做完的收尾做完，接下来是新的大块工作时经 handoff 技能交接。此后用量每再涨 5 个百分点就再拦一次，要求立即生成交接。没有会话暂存目录时每轮都提醒、每轮都拦。窗口大小默认 1,000,000 词元；写在该钩子命令前面的 `CONTEXT_WINDOW_TOKENS`、`CONTEXT_WARN_PCT`、`CONTEXT_HARD_PCT` 与 `CONTEXT_REBLOCK_DELTA_PCT` 覆盖窗口大小与三个阈值 | `context-watermark-gate.test.sh` |
@@ -100,7 +81,7 @@
 | `rule-file-editing` | 编辑 `CLAUDE.md`、`SKILL.md` 等指令文件时的纪律：按改动如何改变运行时行为来裁决每处改动，把例外写成分支，并把删除以及新建的规则文件交给独立复核者 |
 | `memory-audit` | 裁定哪些 Claude Code 记忆条目保留、合并或删除，并重建索引 |
 | `handoff` | 整份生成 `HANDOFF.md`。主线程凭自己的上下文写出 `HANDOFF.new.md`，`scripts/extract.py` 把用户发过的每一条消息连同 git 状态抽到 `.handoff-archive/material/`，`scripts/finalize.sh` 把新文件落位并归档旧版（[ADR 0026](../docs/zh/adr/0026-the-main-thread-writes-the-handoff-itself.md)）。随后接力：剩下每一项都在等用户答复时，把交接路径与开工指令告诉用户；否则经 feature-sharding 的 `launch_tracks.py` 在新的 Ghostty 窗口里拉起接力会话，这需要 macOS 与 Ghostty，拉起失败时改为把路径告诉用户。有 B 类问题等用户答复、且答复之后是一大块工作时，会话先做完不依赖答复的工作，再设一次 50 分钟后的唤醒，赶在一小时的提示词缓存过期之前 |
-| `feature-sharding` | 规划可能装不进主线程剩余预算的多模块工作：按测得的预算与接缝路由，按工作量分箱，要么在当前会话按波次并行派子智能体，要么用 `scripts/spawn_tracks.py` 把每条轨道拉成各在一个工作树里的 `claude --bg -w` 后台会话。规划会话留作父会话：用 `wait_tracks.py` 等候各轨道，回答轨道的问题，为轨道接力，并按顺序合并各轨道（[ADR 0028](../docs/zh/adr/0028-sharding-tracks-run-as-background-sessions-under-the-planning-session.md)）。只有轨道需要凭据或付费额度时，才先请用户批准启动清单。它需要支持后台会话（`claude --bg`）的 Claude Code 版本 |
+| `feature-sharding` | 规划可能装不进主线程剩余预算的多模块工作：按测得的预算与接缝路由，按工作量分箱，要么在当前会话按波次并行派子智能体，要么用 `scripts/spawn_tracks.py` 把每条轨道拉成各在一个工作树里的 `claude --bg -w` 后台会话。规划会话留作父会话：用 `wait_tracks.py` 等候各轨道，回答轨道的问题，在轨道交接时拉起接力会话，并按顺序合并各轨道（[ADR 0028](../docs/zh/adr/0028-sharding-tracks-run-as-background-sessions-under-the-planning-session.md)）。只有轨道需要凭据或付费额度时，才先请用户批准启动清单。它需要支持后台会话（`claude --bg`）的 Claude Code 版本 |
 | `grilling` | 围绕一个计划或决定逐轮追问用户，直到双方理解一致。每轮提问之前，它像编排手册那样给每个待定决定分类，只把 B 类问题拿去问，每个问题附推荐答案。改写自 [mattpocock/skills](https://github.com/mattpocock/skills) |
 
 ## 安装
@@ -113,7 +94,7 @@
 
 要装英文版就把请求里的 `zh/` 换成 `en/`。下面的步骤是写给执行安装的那个 Claude 会话的，它按顺序照做：
 
-1. 告诉用户，这一版在 Claude Code 2.1.319 上测试过，需要支持 `asyncRewake` 钩子、PermissionDenied 与 SessionEnd 钩子事件、并在钩子输入里提供 `scratchpad_dir` 的版本。检查 `bash`、`python3`、`jq` 与 `git` 是否都在 `PATH` 上，缺哪一个就在复制任何文件之前告诉用户：缺少 `python3` 或 `jq` 时，钩子得不出判定就退出，于是每一次调用都未经检查地通过。
+1. 告诉用户，这一版在 Claude Code 2.1.319 上测试过，需要支持 `asyncRewake` 钩子、PermissionDenied 与 SessionEnd 钩子事件、并在钩子输入里提供 `scratchpad_dir` 的版本。检查 `bash`、`python3`、`jq` 与 `git` 是否都在 `PATH` 上，缺哪一个就在复制任何文件之前告诉用户：缺少 `python3` 时，钩子得不出判定就退出，每一次调用都未经检查地通过；缺少 `jq` 时，规则文件提醒与工作树软链失效。
 2. 从用户指定的副本取源文件，即 `en/` 或 `zh/`；请求里两者都没提时先问用户。
 3. 覆盖 `~/.claude/` 下任何已有文件之前（包括 `settings.json`），先把它复制到一个备份位置，并告诉用户备份放在哪里。
 4. 把 `hooks/*.sh` 复制到 `~/.claude/hooks/`，不复制 `hooks/tests/`；把 `skills/` 下的每个目录复制到 `~/.claude/skills/`，不复制测试文件 `skills/*/scripts/test_*.py`；把 `agents/*.md` 复制到 `~/.claude/agents/`；把 `orchestrator-playbook.md` 复制到 `~/.claude/`，即 `hooks/` 的直接上级目录，SessionStart 钩子在那里找它。
@@ -190,14 +171,8 @@ bash scripts/ci-local.sh
 | [评测：方法与局限](../docs/zh/evaluation.md) | 本框架主张什么、不主张什么，以及受控实验要花多少 |
 | [静态上下文测量](../eval/static-context/README.md) | 怎样运行这项测量，每组配置安装了什么 |
 | [钩子变异测试](../eval/hook-mutations/README.md) | 怎样用植入的缺陷衡量钩子测试，以及留出集 |
-| [回复出口回放](../eval/reply-gate-replay/README.md) | 怎样在历史会话上回放回复出口，并与不看回复出口输出、但知道其短语表的智能体所作的标注比对打分 |
+| [回复出口回放](../eval/reply-gate-replay/README.md) | 怎样在历史会话上回放回复出口并打分 |
 
 ## 许可证
 
 MIT。见 `LICENSE`。两份副本里的 `skills/grilling` 改写自 [mattpocock/skills](https://github.com/mattpocock/skills)，按 MIT 发布，版权归原作者，见该目录下的 `LICENSE`。
-
-## 数据来源
-
-| 数字 | 来源 |
-|---|---|
-| 提示词元的计法（输入、缓存写入与缓存读取三项相加） | Anthropic 提示词缓存文档，https://platform.claude.com/docs/en/build-with-claude/prompt-caching |
