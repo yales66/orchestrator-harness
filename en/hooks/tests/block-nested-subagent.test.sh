@@ -31,6 +31,22 @@ check deny "subagent 内调 Workflow（等价 fan-out）" \
 check deny "workflow agent 再派 agent" \
   '{"hook_event_name":"PreToolUse","tool_name":"Agent","agent_id":"a_04","agent_type":"workflow","tool_input":{"subagent_type":"fork"}}'
 
+echo "── subagent 只许再派 model 显式为 haiku 的 Agent/Task 工人 ──"
+check allow "subagent 内派 model=haiku 的 Agent" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Agent","agent_id":"a_05","agent_type":"implementer","tool_input":{"model":"haiku","prompt":"x"}}'
+check allow "subagent 内派 model=haiku 的 Task（旧工具名）" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Task","agent_id":"a_06","tool_input":{"model":"haiku","prompt":"x"}}'
+check allow "model 写全名 claude-haiku-5-5、大小写不敏感" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Agent","agent_id":"a_07","tool_input":{"model":"Claude-Haiku-5-5","prompt":"x"}}'
+check deny  "subagent 内派 model=opus" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Agent","agent_id":"a_08","tool_input":{"model":"opus","prompt":"x"}}'
+check deny  "subagent 内派不写 model（继承父模型）" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Agent","agent_id":"a_09","tool_input":{"subagent_type":"claude","prompt":"x"}}'
+check deny  "名字只是含 haiku 的别的模型" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Agent","agent_id":"a_10","tool_input":{"model":"not-haiku","prompt":"x"}}'
+check deny  "subagent 内 Workflow 即便带 model=haiku" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Workflow","agent_id":"a_11","tool_input":{"model":"haiku","script":"..."}}'
+
 echo "── 必须放行（调用方是主线程，agent_id 缺席）──"
 check allow "主线程派 subagent" \
   '{"hook_event_name":"PreToolUse","tool_name":"Agent","agent_type":"claude","tool_input":{"subagent_type":"Explore"}}'

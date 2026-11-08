@@ -8,7 +8,7 @@
 
 | 主张 | 证据 | 在仓库根目录复跑 |
 |---|---|---|
-| 钩子的行为与 README 描述一致 | 九个测试文件，每个副本 501 个用例，全部通过；持续集成在 Ubuntu 与 macOS 上对两份副本都跑一遍 | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
+| 钩子的行为与 README 描述一致 | 17 个测试文件，每个副本 878 个用例，全部通过；持续集成在 Ubuntu 与 macOS 上对两份副本都跑一遍 | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
 | `en/` 与 `zh/` 是一致的两份副本 | 一致性检查比对两边的文件清单，并要求钩子、测试与代理定义逐字节相同 | `bash scripts/check-parity.sh` |
 | 编排手册只送达主线程 | SessionStart 钩子的测试逐字节核对注入的文本与编排手册；静态测量在 H 组主线程的会话记录里找到编排手册，在子智能体的会话记录里找不到 | `bash en/hooks/tests/orchestrator-playbook-session-start.test.sh` 与 `bash eval/static-context/run.sh` |
 | 编排手册不放进 `CLAUDE.md`，每个子智能体的首次请求输入都变小 | H 组 10,186 词元，N 组 13,529 词元，少 3,343 词元，约 25% | `bash eval/static-context/run.sh` |
@@ -46,8 +46,10 @@
 | 运行 | 变异体集合 | 杀死 / 评估 | 复跑 |
 |---|---|---|---|
 | 首轮，测试尚未补边界用例 | `mutations.tsv`，54 个 | 42 / 54（77.8%） | 无：首轮结果来自加边界用例之前的测试，本仓库不保留那一版测试，无法在这里复跑 |
-| 为首轮 12 个存活变异体补上边界用例后，用当前的钩子与测试 | `mutations.tsv`，54 个 | 54 / 54（100%） | `bash eval/hook-mutations/run.sh` |
-| 留出集，用当前的钩子与测试 | `holdout.tsv`，35 个 | 30 / 35（85.7%） | `HM_MANIFEST=eval/hook-mutations/holdout.tsv HM_OUT=eval/hook-mutations/holdout-results.md bash eval/hook-mutations/run.sh` |
+| 为首轮 12 个存活变异体补上边界用例后，用 2026 年 9 月 30 日的钩子与测试 | `mutations.tsv`，54 个 | 54 / 54（100%） | `bash eval/hook-mutations/run.sh` |
+| 留出集，用 2026 年 9 月 30 日的钩子与测试 | `holdout.tsv`，35 个 | 30 / 35（85.7%） | `HM_MANIFEST=eval/hook-mutations/holdout.tsv HM_OUT=eval/hook-mutations/holdout-results.md bash eval/hook-mutations/run.sh` |
+
+2026 年 9 月 30 日之后，9 个被变异的钩子里有 7 个连同测试改过，清单里 4 处锚点已不在钩子里，所以上表的两条复跑命令现在最多只评估 52 个与 33 个变异体，复现不出这些数字。
 
 第二行拿测试去对付它们正是为之加强过的那批变异体，所以 100% 高估了测试对规则的一般钉牢程度。留出集是只照着钩子头注释写的，写的时候没有看测试、`mutations.tsv` 及其结果，测试从未针对它调过，因此 30 / 35 才是测试抓这类缺陷能力的无偏估计。五个存活的变异体里，两个属于密钥守卫（`cd -` 之后的搜索根，以及仍会打印匹配内容的 `rg -L`），两个属于只读守卫（以 `x` 模式调用的 Python `open`，以及用 `<<<` 喂给解释器的字符串），一个属于上下文水位闸门（读的是最后一条助手消息的用量，而不是最大的那条）。给这五条规则补测试用例，就等于让测试针对留出集调过，那时需要另写一个新的留出集。
 

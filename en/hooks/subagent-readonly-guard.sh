@@ -25,11 +25,18 @@
 #   delete/unlink/rename、IO.write、以 w/a/+ 打开的 File.open/File.new、FileUtils。
 #   写新文件同样拒绝，报告文件改用 Write 工具新建。python3 script.py 这类执行脚本文件的
 #   调用看不到代码，不在判断范围内。
+# heredoc 正文是喂给命令的数据，不当命令逐段判：读它的是 bash/sh/zsh 时正文就是脚本，照命令判；
+#   定界符不带引号时正文里的 $(...) 与反引号会先执行，单独取出来判；喂给解释器的正文按上面的
+#   写文件原语判；其余正文不看，正文里叫 rm 或 mv 的变量不再被当成命令。
+# 拒绝时先追加一行 JSON 到拒绝日志 ${PERMISSION_DENIED_LOG:-~/.claude/state/permission-denied.jsonl}，
+#   与 permission-denied-log.sh 同一文件同一字段，source 与 reason 记 hook:subagent-readonly-guard：
+#   PermissionDenied 事件只在自动模式分类器拒绝时触发，钩子拒绝不经过它，不自己记就看不到。
+#   写日志失败不影响拒绝。
 # 相对路径按输入里的 cwd 解析，并跟随同一条命令里前面以 && || ; 或换行相接的 cd/pushd；
 # cd 的目标不是字面量（含 $ 或反引号，或是 cd -）时，之后的相对写入目标一律按已存在算。
 # 任何异常一律放行，hook 不该卡死会话。
 python3 -c '
-import json, os, re, shlex, sys
+import datetime, json, os, re, shlex, sys
 
 try:
     p = json.load(sys.stdin)
@@ -58,7 +65,23 @@ EXISTING = "只读派发只能新建报告文件，不改已有文件；把要�
 INLINE = ("只读派发不用内联解释器代码写文件：报告文件用 Write 工具新建；"
           "要改已有文件，把内容与位置写进回传，由主线程修改。")
 
+def log_denial():
+    try:
+        target = ti.get("command") or ti.get("file_path") or ti.get("notebook_path") or ""
+        rec = {"ts": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+               "session_id": p.get("session_id"), "cwd": p.get("cwd"), "tool_name": tool,
+               "target": str(target)[:300], "reason": "hook:subagent-readonly-guard",
+               "source": "hook:subagent-readonly-guard"}
+        log = os.environ.get("PERMISSION_DENIED_LOG") or os.path.expanduser(
+            "~/.claude/state/permission-denied.jsonl")
+        os.makedirs(os.path.dirname(log) or ".", exist_ok=True)
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
 def deny(reason=EXISTING):
+    log_denial()
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
         "permissionDecision": "deny",
@@ -314,10 +337,13 @@ def next_cwd(seg, op, where):
 
 HEREDOC = re.compile(r"(?<![<\w])<<-?[ \t]*([\x27\"]?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n(.*?)"
                      r"(?:\n[ \t]*\2[ \t]*(?=\n|$)|\Z)", re.S)
+SUBST = (re.compile(r"\$\(([^()]*)\)"), re.compile(r"`([^`]*)`"))
 
 def scan(cmd, depth, where):
     global cwd
-    # heredoc 喂给解释器的正文就是它要跑的代码
+    # heredoc 喂给解释器的正文就是它要跑的代码；喂给 shell 的正文是脚本，照命令判；
+    # 定界符不带引号时正文里的 $(...) 与反引号会执行，留给下面的替换体检查；其余正文删去再拆段
+    kept, last, bodies = [], 0, []
     for m in HEREDOC.finditer(cmd):
         start = cmd.rfind("\n", 0, m.start()) + 1
         end = cmd.find("\n", m.start())
@@ -325,9 +351,22 @@ def scan(cmd, depth, where):
             t = [a for a in tokens(seg) if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", a)]
             while t and t[0] in ("sudo", "command", "exec", "nohup", "time", "env"):
                 t = t[1:]
-            lang = interpreter(os.path.basename(t[0])) if t else None
+            name = os.path.basename(t[0]) if t else ""
+            lang = interpreter(name)
             if lang and code_writes(lang, m.group(3)):
                 return INLINE
+            if name in SHELLS and depth < MAX_DEPTH:
+                saved = cwd
+                r = scan(m.group(3), depth + 1, where)
+                cwd = saved
+                if r:
+                    return r
+        if not m.group(1):
+            bodies.append(m.group(3))
+        kept.append(cmd[last:m.start(3)])
+        last = m.end()
+    kept.append(cmd[last:])
+    cmd = "".join(kept)
     ops, start = [], where
     segs = split_cmd(cmd, ops)
     stack, in_bt = [], False
@@ -342,7 +381,7 @@ def scan(cmd, depth, where):
         elif op in (")", "`") and stack:
             where = stack.pop()
         in_bt = in_bt != (op == "`")
-    inner = re.findall(r"\$\(([^()]*)\)", cmd) + re.findall(r"`([^`]*)`", cmd)
+    inner = [x for body in [cmd] + bodies for r in SUBST for x in r.findall(body)]
     for x in [x for body in inner for x in split_cmd(body)]:
         cwd = start
         r = x.strip() and writes_existing(x, depth)

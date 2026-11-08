@@ -8,7 +8,7 @@ The evidence on this page is of two kinds. A deterministic measurement comes wit
 
 | Claim | Evidence | Rerun from the repository root |
 |---|---|---|
-| The hooks behave as the README describes | nine test files with 501 cases per copy, all passing, run by CI on Ubuntu and macOS for both copies | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
+| The hooks behave as the README describes | 17 test files with 878 cases per copy, all passing, run by CI on Ubuntu and macOS for both copies | `for t in en/hooks/tests/*.test.sh; do bash "$t"; done` |
 | `en/` and `zh/` are matching copies | the parity check compares the file lists and requires byte-identical hooks, tests and agents | `bash scripts/check-parity.sh` |
 | The playbook reaches only the main thread | the SessionStart test checks the injected text against the playbook byte for byte, and the static measurement finds the playbook in the main transcript and not in the subagent transcript of group H | `bash en/hooks/tests/orchestrator-playbook-session-start.test.sh` and `bash eval/static-context/run.sh` |
 | Keeping the playbook out of `CLAUDE.md` shrinks every subagent's first-request input | 10,186 tokens in H against 13,529 in N, 3,343 fewer or about 25% | `bash eval/static-context/run.sh` |
@@ -46,8 +46,10 @@ These figures were measured before the handoff skill was added and section 3 of 
 | Run | Mutant set | Killed / evaluated | Rerun |
 |---|---|---|---|
 | First run, on the tests before the boundary cases were added | `mutations.tsv`, 54 mutants | 42 / 54 (77.8%) | none: the result comes from the tests as they stood before the boundary cases were added, and this repository does not keep that version, so it cannot be rerun here |
-| After boundary cases were added for the 12 survivors, on the current hooks and tests | `mutations.tsv`, 54 mutants | 54 / 54 (100%) | `bash eval/hook-mutations/run.sh` |
-| Held-out set, on the current hooks and tests | `holdout.tsv`, 35 mutants | 30 / 35 (85.7%) | `HM_MANIFEST=eval/hook-mutations/holdout.tsv HM_OUT=eval/hook-mutations/holdout-results.md bash eval/hook-mutations/run.sh` |
+| After boundary cases were added for the 12 survivors, on the hooks and tests of 30 September 2026 | `mutations.tsv`, 54 mutants | 54 / 54 (100%) | `bash eval/hook-mutations/run.sh` |
+| Held-out set, on the hooks and tests of 30 September 2026 | `holdout.tsv`, 35 mutants | 30 / 35 (85.7%) | `HM_MANIFEST=eval/hook-mutations/holdout.tsv HM_OUT=eval/hook-mutations/holdout-results.md bash eval/hook-mutations/run.sh` |
+
+Seven of the nine mutated hooks or their tests have changed since 30 September 2026, and four manifest anchors no longer occur in the hooks, so the two rerun commands above now evaluate at most 52 and 33 mutants and do not reproduce these figures.
 
 The second row measures the tests against the very mutants they were strengthened to kill, so its 100% overstates how well they pin rules in general. The held-out set was written from the header comments without reading the tests, `mutations.tsv` or its results, so the tests were never tuned to it, and that makes 30 of 35 the unbiased estimate of how well they catch defects of this shape. The five survivors are two rules of the secret guard (the search root after `cd -`, and `rg -L`, which still prints matches), two of the read-only guard (Python `open` in `x` mode, and a here-string fed to an interpreter) and one of the context watermark gate (reading the last assistant message's usage rather than the largest). Adding test cases for these five would tune the tests to the held-out set, which would then need replacing by a fresh one.
 

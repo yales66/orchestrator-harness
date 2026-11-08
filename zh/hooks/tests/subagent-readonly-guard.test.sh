@@ -5,6 +5,8 @@ HOOK="$(dirname "$0")/../subagent-readonly-guard.sh"
 PASS=0; FAIL=0
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+# 拒绝时钩子会追加一行到拒绝日志；测试一律写到临时目录，不碰真实日志
+export PERMISSION_DENIED_LOG="$TMP/state/denied.jsonl"
 mkdir -p "$TMP/repo/src"
 echo 'print(1)' > "$TMP/repo/src/app.py"
 echo 'notes' > "$TMP/repo/notes.md"
@@ -44,6 +46,7 @@ try:
 except Exception:
     print("allow")
 ')
+  desc=${desc//$'\n'/⏎}
   if [ "$got" = "$want" ]; then
     PASS=$((PASS+1)); printf '  ✅ %-52s [%s]\n' "$desc" "$got"
   else
@@ -204,6 +207,18 @@ allow_cmd "node -e 'console.log(require(\"fs\").readFileSync(\"src/app.py\", \"u
 allow_cmd "perl -ne 'print if /x/' src/app.py"
 allow_cmd "ruby -e 'puts File.read(\"src/app.py\")'"
 
+echo "── researcher 的 Bash: 不喂给 shell 的 heredoc 正文是数据，不当命令判 ──"
+allow_cmd $'python3 - <<\'EOF\'\nimport collections\nrm = collections.Counter()\nprint(rm)\nEOF'
+allow_cmd $'cat > reports/new.py <<\'EOF\'\nmv = 2\nEOF'
+allow_cmd $'cat <<\'EOF\'\n$(rm src/app.py)\nEOF'
+allow_cmd $'python3 - <<\'EOF\' > reports/out.txt\nchmod = 1\nprint(chmod)\nEOF\nwc -l reports/out.txt'
+deny_cmd  $'cat > src/app.py <<\'EOF\'\nx = 1\nEOF'
+deny_cmd  $'bash <<\'EOF\'\nrm src/app.py\nEOF'
+deny_cmd  $'sh <<EOF\necho x > src/app.py\nEOF'
+deny_cmd  $'cat <<EOF\n$(rm src/app.py)\nEOF'
+deny_cmd  $'cat <<\'EOF\'\nhello\nEOF\nrm src/app.py'
+deny_cmd  $'python3 - <<\'EOF\'\nopen("reports/x.md", "w").write("x")\nEOF'
+
 echo "── researcher 的 Bash: 相对路径跟随前面的 cd/pushd ──"
 deny_cmd  'cd src && echo x > app.py'
 deny_cmd  'cd src; echo x >> app.py'
@@ -239,6 +254,23 @@ check allow "主线程 Bash 删文件"             "$(bash_json 'rm src/app.py' 
 check allow "--agent researcher 会话主线程 Bash" "$(bash_json 'git reset --hard' researcher '')"
 check allow "其他子智能体 Bash 覆盖写"      "$(bash_json 'echo x > src/app.py' general-purpose a_07)"
 check allow "agent_type 大小写不同不算"     "$(tool_json Edit "$TMP/repo/src/app.py" Researcher a_04)"
+
+echo "── 拒绝写一行到拒绝日志，放行不写 ──"
+rm -f "$PERMISSION_DENIED_LOG"
+printf '%s' "$(bash_json 'ls src')" | bash "$HOOK" >/dev/null 2>&1
+[ ! -s "$PERMISSION_DENIED_LOG" ] && { PASS=$((PASS+1)); echo "  ✅ 放行不写日志"; } || { FAIL=$((FAIL+1)); echo "  ❌ 放行不应写日志"; }
+printf '%s' "$(bash_json 'rm src/app.py')" | bash "$HOOK" >/dev/null 2>&1
+printf '%s' "$(tool_json Edit "$TMP/repo/src/app.py")" | bash "$HOOK" >/dev/null 2>&1
+got=$(python3 -c '
+import json, sys
+try:
+    r = [json.loads(l) for l in open(sys.argv[1], encoding="utf-8")]
+    print(len(r), r[0]["reason"], r[0]["source"], r[0]["tool_name"], r[0]["target"], r[1]["tool_name"], r[1]["target"].endswith("src/app.py"))
+except Exception as e:
+    print("ERR", e)' "$PERMISSION_DENIED_LOG")
+[ "$got" = "2 hook:subagent-readonly-guard hook:subagent-readonly-guard Bash rm src/app.py Edit True" ] && { PASS=$((PASS+1)); echo "  ✅ 每次拒绝写一行（reason/source/tool_name/target）"; } || { FAIL=$((FAIL+1)); echo "  ❌ 日志行不对: $got"; }
+out=$(printf '%s' "$(bash_json 'rm src/app.py')" | PERMISSION_DENIED_LOG=/dev/null/nope/x.jsonl bash "$HOOK" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["hookSpecificOutput"]["permissionDecision"])' 2>/dev/null)
+[ "$out" = deny ] && { PASS=$((PASS+1)); echo "  ✅ 日志不可写仍照常拒绝"; } || { FAIL=$((FAIL+1)); echo "  ❌ 日志不可写时应仍拒绝，得 $out"; }
 
 echo "── 输入异常必须 fail-open ──"
 check allow "非 JSON 输入" 'not json at all'

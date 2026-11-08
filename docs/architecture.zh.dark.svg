@@ -1,184 +1,234 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1300" height="1174" viewBox="0 0 1300 1174" role="img" aria-label="架构图，画的是一轮工作怎样运行。会话开始、/clear 与压缩之后，SessionStart 钩子把编排手册注入主线程，子智能体收不到。用户本人键入的消息提到生产模式时，UserPromptSubmit 钩子给主线程注入一句说明，讲怎样设置与取消仓库的生产标记。主线程向子智能体发出派发说明，子智能体凭 agents/*.md 里设定了推理强度的定义、CLAUDE.md 与派发说明干活，交回有界回报。两条线程的每次工具调用在工具执行之前都经过 PreToolUse：子智能体内的嵌套派发、git commit --no-verify、会打印密钥值的调用、直接改写 HANDOFF.md，以及 researcher 或 retriever 子智能体改动、移动或删除已有文件的操作都被拒绝，researcher 与 retriever 子智能体读文件、跑命令与新建文件都放行；在标成生产的仓库里执行 gh pr merge，要等用户当场同意才执行；5 小时用量到 95% 及以上时，PreToolUse 里的限额暂停把两条线程的每次调用挂起到重置，每过 50 分钟拒绝一次被挂起的调用，线程随即发出暂停调用（: 限额暂停）并再被挂起，过了重置时间才放行；主线程里，用户本人在用量到 95% 之后发出的输入与缓存保活的最后一次唤醒不被挂起；限额暂停的用量取自本地文件，由状态栏包装把 Claude Code 传给状态栏的 rate_limits 记进这个文件；拒绝理由回到发起调用的线程，线程换一种做法；放行的调用交给工具执行。工具执行之后，PostToolUse 在改了规则文件时把规则文件提醒作为附加上下文送回发起调用的线程，在进入新工作树时把主检出目录中的 CLAUDE.md、node_modules 与 .env* 软链进这个工作树，不回话。主线程想结束这一轮时经过 Stop 钩子，都放行则这一轮结束，其中两个是同步闸门。上下文水位闸门过 35% 时每个会话提醒一次并放行，没有会话暂存目录时则每轮提醒，过 40% 拦一次，没有会话暂存目录时则每轮都拦，此后以上次拦截时的水位为基准，每再涨 5 个百分点就再拦一次；回复出口在回复末句是提议问句时拦一次，仅 zh/ 副本的安装里，较长的回复主要不是中文时也拦一次。这两个闸门拦下都回到主线程。被回复出口拦下，主线程要么直接把提议的那一步做掉，要么在确实需要用户拍板时按背景、各选项的后果与推荐的格式重新提问，因语言被拦时用中文重写。被水位闸门第一次拦下，已有上下文能做完的收尾就做完，接下来是新的大块工作时运行 handoff 技能，由 researcher 子智能体写出 HANDOFF.new.md，再由 finalize.sh 落位成交接文件，并提示用户换新会话；此后每次再被拦都立即生成交接文件。新会话读交接文件接着做。两个同步闸门都不会拦刚被自己拦下而续跑的那一轮，所以一次停止尝试最多被拦一次，这一轮再想停就放行；水位闸门在之后的轮次里仍会随用量上涨再拦。第三个 Stop 钩子缓存保活不拦停：它在这一轮结束后于后台计时，主线程上下文达到 150,000 词元且 50 分钟里没有新的一轮时，唤醒主线程只回一个句点，用户离开期间一小时的提示词缓存因此不过期；唤醒之前先探测 API，连不上就每 30 秒再探，到这一轮结束后 57 分钟仍连不上就放弃，因为再唤醒已来不及在缓存过期前续上。每次唤醒后照常重新计时，直到距用户本人最后一条消息满 8 小时；到上限前的最后一次唤醒，还有工作要接着做就让主线程用 handoff 技能写交接，否则只回一个句点。" font-family="system-ui, -apple-system, &#x27;Segoe UI&#x27;, Helvetica, Arial, sans-serif">
-<title>架构图，画的是一轮工作怎样运行。会话开始、/clear 与压缩之后，SessionStart 钩子把编排手册注入主线程，子智能体收不到。用户本人键入的消息提到生产模式时，UserPromptSubmit 钩子给主线程注入一句说明，讲怎样设置与取消仓库的生产标记。主线程向子智能体发出派发说明，子智能体凭 agents/*.md 里设定了推理强度的定义、CLAUDE.md 与派发说明干活，交回有界回报。两条线程的每次工具调用在工具执行之前都经过 PreToolUse：子智能体内的嵌套派发、git commit --no-verify、会打印密钥值的调用、直接改写 HANDOFF.md，以及 researcher 或 retriever 子智能体改动、移动或删除已有文件的操作都被拒绝，researcher 与 retriever 子智能体读文件、跑命令与新建文件都放行；在标成生产的仓库里执行 gh pr merge，要等用户当场同意才执行；5 小时用量到 95% 及以上时，PreToolUse 里的限额暂停把两条线程的每次调用挂起到重置，每过 50 分钟拒绝一次被挂起的调用，线程随即发出暂停调用（: 限额暂停）并再被挂起，过了重置时间才放行；主线程里，用户本人在用量到 95% 之后发出的输入与缓存保活的最后一次唤醒不被挂起；限额暂停的用量取自本地文件，由状态栏包装把 Claude Code 传给状态栏的 rate_limits 记进这个文件；拒绝理由回到发起调用的线程，线程换一种做法；放行的调用交给工具执行。工具执行之后，PostToolUse 在改了规则文件时把规则文件提醒作为附加上下文送回发起调用的线程，在进入新工作树时把主检出目录中的 CLAUDE.md、node_modules 与 .env* 软链进这个工作树，不回话。主线程想结束这一轮时经过 Stop 钩子，都放行则这一轮结束，其中两个是同步闸门。上下文水位闸门过 35% 时每个会话提醒一次并放行，没有会话暂存目录时则每轮提醒，过 40% 拦一次，没有会话暂存目录时则每轮都拦，此后以上次拦截时的水位为基准，每再涨 5 个百分点就再拦一次；回复出口在回复末句是提议问句时拦一次，仅 zh/ 副本的安装里，较长的回复主要不是中文时也拦一次。这两个闸门拦下都回到主线程。被回复出口拦下，主线程要么直接把提议的那一步做掉，要么在确实需要用户拍板时按背景、各选项的后果与推荐的格式重新提问，因语言被拦时用中文重写。被水位闸门第一次拦下，已有上下文能做完的收尾就做完，接下来是新的大块工作时运行 handoff 技能，由 researcher 子智能体写出 HANDOFF.new.md，再由 finalize.sh 落位成交接文件，并提示用户换新会话；此后每次再被拦都立即生成交接文件。新会话读交接文件接着做。两个同步闸门都不会拦刚被自己拦下而续跑的那一轮，所以一次停止尝试最多被拦一次，这一轮再想停就放行；水位闸门在之后的轮次里仍会随用量上涨再拦。第三个 Stop 钩子缓存保活不拦停：它在这一轮结束后于后台计时，主线程上下文达到 150,000 词元且 50 分钟里没有新的一轮时，唤醒主线程只回一个句点，用户离开期间一小时的提示词缓存因此不过期；唤醒之前先探测 API，连不上就每 30 秒再探，到这一轮结束后 57 分钟仍连不上就放弃，因为再唤醒已来不及在缓存过期前续上。每次唤醒后照常重新计时，直到距用户本人最后一条消息满 8 小时；到上限前的最后一次唤醒，还有工作要接着做就让主线程用 handoff 技能写交接，否则只回一个句点。</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1300" height="1441" viewBox="0 0 1300 1441" role="img" aria-label="架构图，画的是一轮工作怎样运行。会话开始、/clear 与压缩之后，SessionStart 钩子把编排手册注入主线程，编排手册分 4 部分注册（--part 1 到 4），每部分不超过 9,500 字符，错开启动以按顺序到达，子智能体收不到。用户本人键入的消息提到生产模式时，UserPromptSubmit 钩子给主线程注入一句说明，讲怎样设置与取消仓库的生产标记。主线程向子智能体发出派发说明，子智能体凭 agents/*.md 里设定了推理强度的定义、CLAUDE.md 与派发说明干活，交回有界回报。子智能体可再派一层 haiku 工人做短小的机械活，工人不能再往下派。两条线程的每次工具调用在工具执行之前都经过 PreToolUse：子智能体内除 haiku 工人以外的嵌套派发、git commit --no-verify、会打印密钥值的 Bash、Read 或 Grep 调用、直接改写 HANDOFF.md，以及 researcher 或 retriever 子智能体改动、移动或删除已有文件的操作都被拒绝，researcher 与 retriever 子智能体读文件、跑命令与新建文件都放行；在标成生产的仓库里执行 gh pr merge，要等用户当场同意才执行；5 小时用量到 95% 及以上时，PreToolUse 里的限额暂停把两条线程的每次调用挂起到重置，每过 50 分钟拒绝一次被挂起的调用，线程随即发出暂停调用（: 限额暂停）并再被挂起，过了重置时间才放行；主线程里，用户本人在用量到 95% 之后发出的输入与缓存保活的最后一次唤醒不被挂起；限额暂停的用量取自本地文件，由状态栏包装把 Claude Code 传给状态栏的 rate_limits 记进这个文件；拒绝理由回到发起调用的线程，线程换一种做法；放行的调用交给工具执行。各守卫拒绝时追加一行到本地拒绝日志，PermissionDenied 钩子把自动模式分类器的拒绝也记进同一个日志，不影响控制流。工具执行之后，PostToolUse 在改了规则文件时把规则文件提醒作为附加上下文送回发起调用的线程，在进入新工作树时把主检出目录中的 CLAUDE.md、node_modules 与 .env* 软链进这个工作树，不回话。主线程想结束这一轮时经过 Stop 钩子，都放行则这一轮结束，其中三个是同步闸门。上下文水位闸门过 35% 时每个会话提醒一次并放行，没有会话暂存目录时则每轮提醒，过 40% 拦一次，没有会话暂存目录时则每轮都拦，此后以上次拦截时的水位为基准，每再涨 5 个百分点就再拦一次；回复出口在回复末句是提议问句时拦一次，仅 zh/ 副本的安装里，较长的回复主要不是中文时也拦一次。任务清单闸门在会话的任务清单（~/.claude/state/checklists/&lt;会话 id&gt;.json）里还有 todo 或 doing 项时拦下收工，有后台任务或定时任务在等、在子智能体里、或清单没变时已拦满 3 次则放行。这三个闸门拦下都回到主线程；被任务清单闸门拦下，主线程接着做未完成项。被回复出口拦下，主线程要么直接把提议的那一步做掉，要么在确实需要用户拍板时按背景、各选项的后果与推荐的格式重新提问，因语言被拦时用中文重写。被水位闸门第一次拦下，已有上下文能做完的收尾就做完，接下来是新的大块工作时运行 handoff 技能，由主线程自己写出 HANDOFF.new.md，再由 finalize.sh 落位成 HANDOFF.md，并提示用户换新会话；此后每次再被拦都立即生成交接文件。新会话读交接文件接着做。回复出口与水位闸门都不会拦刚被自己拦下而续跑的那一轮，所以一次停止尝试最多被拦一次，这一轮再想停就放行；水位闸门在之后的轮次里仍会随用量上涨再拦。第四个 Stop 钩子缓存保活不拦停：它在这一轮结束后于后台计时，主线程上下文达到 150,000 词元且 50 分钟里没有新的一轮时，唤醒主线程只回一个句点，用户离开期间一小时的提示词缓存因此不过期；唤醒之前先探测 API，连不上就每 30 秒再探，到这一轮结束后 57 分钟仍连不上就放弃，因为再唤醒已来不及在缓存过期前续上。每次唤醒后照常重新计时，直到距用户本人最后一条消息满 8 小时；到上限前的最后一次唤醒，还有工作要接着做就让主线程用 handoff 技能写交接，否则只回一个句点。唤醒时主线程回了「完」，保活就停到用户的下一条消息。缓存保活也挂在 SessionEnd 上，会话结束时留下标记，旧计时器不会唤醒新会话。" font-family="system-ui, -apple-system, &#x27;Segoe UI&#x27;, Helvetica, Arial, sans-serif">
+<title>架构图，画的是一轮工作怎样运行。会话开始、/clear 与压缩之后，SessionStart 钩子把编排手册注入主线程，编排手册分 4 部分注册（--part 1 到 4），每部分不超过 9,500 字符，错开启动以按顺序到达，子智能体收不到。用户本人键入的消息提到生产模式时，UserPromptSubmit 钩子给主线程注入一句说明，讲怎样设置与取消仓库的生产标记。主线程向子智能体发出派发说明，子智能体凭 agents/*.md 里设定了推理强度的定义、CLAUDE.md 与派发说明干活，交回有界回报。子智能体可再派一层 haiku 工人做短小的机械活，工人不能再往下派。两条线程的每次工具调用在工具执行之前都经过 PreToolUse：子智能体内除 haiku 工人以外的嵌套派发、git commit --no-verify、会打印密钥值的 Bash、Read 或 Grep 调用、直接改写 HANDOFF.md，以及 researcher 或 retriever 子智能体改动、移动或删除已有文件的操作都被拒绝，researcher 与 retriever 子智能体读文件、跑命令与新建文件都放行；在标成生产的仓库里执行 gh pr merge，要等用户当场同意才执行；5 小时用量到 95% 及以上时，PreToolUse 里的限额暂停把两条线程的每次调用挂起到重置，每过 50 分钟拒绝一次被挂起的调用，线程随即发出暂停调用（: 限额暂停）并再被挂起，过了重置时间才放行；主线程里，用户本人在用量到 95% 之后发出的输入与缓存保活的最后一次唤醒不被挂起；限额暂停的用量取自本地文件，由状态栏包装把 Claude Code 传给状态栏的 rate_limits 记进这个文件；拒绝理由回到发起调用的线程，线程换一种做法；放行的调用交给工具执行。各守卫拒绝时追加一行到本地拒绝日志，PermissionDenied 钩子把自动模式分类器的拒绝也记进同一个日志，不影响控制流。工具执行之后，PostToolUse 在改了规则文件时把规则文件提醒作为附加上下文送回发起调用的线程，在进入新工作树时把主检出目录中的 CLAUDE.md、node_modules 与 .env* 软链进这个工作树，不回话。主线程想结束这一轮时经过 Stop 钩子，都放行则这一轮结束，其中三个是同步闸门。上下文水位闸门过 35% 时每个会话提醒一次并放行，没有会话暂存目录时则每轮提醒，过 40% 拦一次，没有会话暂存目录时则每轮都拦，此后以上次拦截时的水位为基准，每再涨 5 个百分点就再拦一次；回复出口在回复末句是提议问句时拦一次，仅 zh/ 副本的安装里，较长的回复主要不是中文时也拦一次。任务清单闸门在会话的任务清单（~/.claude/state/checklists/&lt;会话 id&gt;.json）里还有 todo 或 doing 项时拦下收工，有后台任务或定时任务在等、在子智能体里、或清单没变时已拦满 3 次则放行。这三个闸门拦下都回到主线程；被任务清单闸门拦下，主线程接着做未完成项。被回复出口拦下，主线程要么直接把提议的那一步做掉，要么在确实需要用户拍板时按背景、各选项的后果与推荐的格式重新提问，因语言被拦时用中文重写。被水位闸门第一次拦下，已有上下文能做完的收尾就做完，接下来是新的大块工作时运行 handoff 技能，由主线程自己写出 HANDOFF.new.md，再由 finalize.sh 落位成 HANDOFF.md，并提示用户换新会话；此后每次再被拦都立即生成交接文件。新会话读交接文件接着做。回复出口与水位闸门都不会拦刚被自己拦下而续跑的那一轮，所以一次停止尝试最多被拦一次，这一轮再想停就放行；水位闸门在之后的轮次里仍会随用量上涨再拦。第四个 Stop 钩子缓存保活不拦停：它在这一轮结束后于后台计时，主线程上下文达到 150,000 词元且 50 分钟里没有新的一轮时，唤醒主线程只回一个句点，用户离开期间一小时的提示词缓存因此不过期；唤醒之前先探测 API，连不上就每 30 秒再探，到这一轮结束后 57 分钟仍连不上就放弃，因为再唤醒已来不及在缓存过期前续上。每次唤醒后照常重新计时，直到距用户本人最后一条消息满 8 小时；到上限前的最后一次唤醒，还有工作要接着做就让主线程用 handoff 技能写交接，否则只回一个句点。唤醒时主线程回了「完」，保活就停到用户的下一条消息。缓存保活也挂在 SessionEnd 上，会话结束时留下标记，旧计时器不会唤醒新会话。</title>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#9198a1"/></marker><marker id="back" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#f0883e"/></marker></defs>
 <g id="userpromptsubmit">
 <rect id="ups-box" x="16.75" y="16.75" width="302.5" height="62.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
 <text x="168" y="42" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="ups-box">UserPromptSubmit 钩子</text>
 <text x="168" y="64" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="ups-box">用户每次键入消息</text>
 </g>
-<path d="M320,48 L580,48 L580,172 L600,172" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path d="M320,48 L580,48 L580,212 L600,212" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
 <text x="332" y="40" font-size="12.5" text-anchor="start" fill="#c9d1d9">提到生产模式时：</text>
 <text x="332" y="66" font-size="12.5" text-anchor="start" fill="#c9d1d9">注入设置标记的方法</text>
 <g id="sessionstart">
-<rect id="ss-box" x="600.75" y="16.75" width="338.5" height="62.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
+<rect id="ss-box" x="600.75" y="16.75" width="338.5" height="84.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
 <text x="770" y="42" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="ss-box">SessionStart 钩子</text>
 <text x="770" y="64" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="ss-box">会话开始、/clear、压缩之后</text>
+<text x="770" y="86" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="ss-box">分 4 部分：--part 1..4，每部分 ≤ 9,500 字符</text>
 </g>
-<path d="M770,80 L770,150" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="782" y="110" font-size="12.5" text-anchor="start" fill="#c9d1d9">注入编排手册</text>
-<text x="782" y="128" font-size="12.5" text-anchor="start" fill="#c9d1d9">只进主线程</text>
+<path d="M770,102 L770,190" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="782" y="128" font-size="12.5" text-anchor="start" fill="#c9d1d9">逐部分注入编排手册，</text>
+<text x="782" y="146" font-size="12.5" text-anchor="start" fill="#c9d1d9">错开启动，按顺序到达，</text>
+<text x="782" y="164" font-size="12.5" text-anchor="start" fill="#c9d1d9">只进主线程</text>
 <g id="main">
-<rect id="main-box" x="600.75" y="150.75" width="338.5" height="178.5" rx="8" fill="#0c2d6b" stroke="#4493f8" stroke-width="1.5"/>
-<text x="616" y="179" font-size="15" font-weight="600" fill="#e6edf3" data-box="main-box">主线程</text>
-<text x="616" y="197" font-size="12.5" fill="#9198a1" data-box="main-box">编排者</text>
-<line x1="601.5" y1="205" x2="938.5" y2="205" stroke="#1f4f96" stroke-width="1"/>
-<text x="616" y="232" font-size="13.5" fill="#e6edf3" data-box="main-box">CLAUDE.md</text>
-<text x="616" y="258" font-size="13.5" fill="#e6edf3" data-box="main-box">编排手册</text>
-<text x="616" y="284" font-size="13.5" fill="#e6edf3" data-box="main-box">技能，按需加载</text>
+<rect id="main-box" x="600.75" y="190.75" width="338.5" height="178.5" rx="8" fill="#0c2d6b" stroke="#4493f8" stroke-width="1.5"/>
+<text x="616" y="219" font-size="15" font-weight="600" fill="#e6edf3" data-box="main-box">主线程</text>
+<text x="616" y="237" font-size="12.5" fill="#9198a1" data-box="main-box">编排者</text>
+<line x1="601.5" y1="245" x2="938.5" y2="245" stroke="#1f4f96" stroke-width="1"/>
+<text x="616" y="272" font-size="13.5" fill="#e6edf3" data-box="main-box">CLAUDE.md</text>
+<text x="616" y="298" font-size="13.5" fill="#e6edf3" data-box="main-box">编排手册，4 部分</text>
+<text x="616" y="324" font-size="13.5" fill="#e6edf3" data-box="main-box">技能，按需加载</text>
 </g>
 <g id="subagent">
-<rect id="sub-box" x="1080.75" y="150.75" width="202.5" height="224.5" rx="8" fill="#0c2d6b" stroke="#4493f8" stroke-width="1.5"/>
-<text x="1096" y="179" font-size="15" font-weight="600" fill="#e6edf3" data-box="sub-box">子智能体</text>
-<line x1="1081.5" y1="205" x2="1282.5" y2="205" stroke="#1f4f96" stroke-width="1"/>
-<text x="1096" y="232" font-size="13.5" fill="#e6edf3" data-box="sub-box">agents/*.md</text>
-<text x="1108" y="250" font-size="12.5" fill="#9198a1" data-box="sub-box">定义与推理强度</text>
-<text x="1096" y="276" font-size="13.5" fill="#e6edf3" data-box="sub-box">CLAUDE.md</text>
-<text x="1096" y="302" font-size="13.5" fill="#e6edf3" data-box="sub-box">派发说明</text>
-<text x="1096" y="328" font-size="13.5" fill="#e6edf3" data-box="sub-box">技能，按需加载</text>
-<line x1="1081.5" y1="340" x2="1282.5" y2="340" stroke="#1f4f96" stroke-width="1" stroke-dasharray="3 3"/>
-<text x="1096" y="362" font-size="12.5" fill="#9198a1" data-box="sub-box">收不到编排手册</text>
+<rect id="sub-box" x="1080.75" y="190.75" width="202.5" height="224.5" rx="8" fill="#0c2d6b" stroke="#4493f8" stroke-width="1.5"/>
+<text x="1096" y="219" font-size="15" font-weight="600" fill="#e6edf3" data-box="sub-box">子智能体</text>
+<line x1="1081.5" y1="245" x2="1282.5" y2="245" stroke="#1f4f96" stroke-width="1"/>
+<text x="1096" y="272" font-size="13.5" fill="#e6edf3" data-box="sub-box">agents/*.md</text>
+<text x="1108" y="290" font-size="12.5" fill="#9198a1" data-box="sub-box">定义与推理强度</text>
+<text x="1096" y="316" font-size="13.5" fill="#e6edf3" data-box="sub-box">CLAUDE.md</text>
+<text x="1096" y="342" font-size="13.5" fill="#e6edf3" data-box="sub-box">派发说明</text>
+<text x="1096" y="368" font-size="13.5" fill="#e6edf3" data-box="sub-box">技能，按需加载</text>
+<line x1="1081.5" y1="380" x2="1282.5" y2="380" stroke="#1f4f96" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="1096" y="402" font-size="12.5" fill="#9198a1" data-box="sub-box">收不到编排手册</text>
 </g>
-<path d="M940,215 L1080,215" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="1010" y="206" font-size="12.5" text-anchor="middle" fill="#c9d1d9">派发说明</text>
-<path d="M1080,265 L940,265" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="1010" y="256" font-size="12.5" text-anchor="middle" fill="#c9d1d9">有界回报</text>
+<path d="M940,255 L1080,255" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="1010" y="246" font-size="12.5" text-anchor="middle" fill="#c9d1d9">派发说明</text>
+<path d="M1080,305 L940,305" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="1010" y="296" font-size="12.5" text-anchor="middle" fill="#c9d1d9">有界回报</text>
+<path d="M1150,416 L1150,476" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="1140" y="451" font-size="12.5" text-anchor="end" fill="#c9d1d9">派发说明</text>
+<path d="M1230,476 L1230,416" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="1242" y="451" font-size="12.5" text-anchor="start" fill="#c9d1d9">回报</text>
+<g id="worker">
+<rect id="worker-box" x="1080.75" y="476.75" width="202.5" height="102.5" rx="8" fill="#0c2d6b" stroke="#4493f8" stroke-width="1.5"/>
+<text x="1096" y="502" font-size="15" font-weight="600" fill="#e6edf3" data-box="worker-box">haiku 工人</text>
+<text x="1096" y="522" font-size="12.5" fill="#9198a1" data-box="worker-box">短小的机械活</text>
+<line x1="1081.5" y1="532" x2="1282.5" y2="532" stroke="#1f4f96" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="1096" y="552" font-size="12.5" fill="#9198a1" data-box="worker-box">只有一层：工人</text>
+<text x="1096" y="569" font-size="12.5" fill="#9198a1" data-box="worker-box">不能再往下派</text>
+</g>
 <g id="stop">
-<rect id="stop-box" x="16.75" y="150.75" width="302.5" height="362.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
-<text x="168" y="179" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="stop-box">Stop 钩子</text>
-<line x1="17.5" y1="188" x2="318.5" y2="188" stroke="#3d444d" stroke-width="1"/>
-<text x="32" y="210" font-size="13.5" font-weight="600" fill="#e6edf3" data-box="stop-box">上下文水位闸门</text>
-<text x="32" y="230" font-size="13.5" fill="#e6edf3" data-box="stop-box">过 35%：每个会话提醒一次，放行</text>
-<text x="32" y="250" font-size="13.5" fill="#e6edf3" data-box="stop-box">过 40%：拦一次</text>
-<text x="32" y="270" font-size="13.5" fill="#e6edf3" data-box="stop-box">越线后再涨 5 个点：再拦，立即写交接</text>
-<line x1="17.5" y1="282" x2="318.5" y2="282" stroke="#3d444d" stroke-width="1"/>
-<text x="32" y="304" font-size="13.5" font-weight="600" fill="#e6edf3" data-box="stop-box">回复出口</text>
-<text x="32" y="324" font-size="13.5" fill="#e6edf3" data-box="stop-box">末句是提议问句，</text>
-<text x="32" y="344" font-size="13.5" fill="#e6edf3" data-box="stop-box">或回复不是中文时，拦一次</text>
-<line x1="17.5" y1="356" x2="318.5" y2="356" stroke="#3d444d" stroke-width="1"/>
-<text x="32" y="378" font-size="13.5" font-weight="600" fill="#e6edf3" data-box="stop-box">缓存保活</text>
-<text x="32" y="398" font-size="13.5" fill="#e6edf3" data-box="stop-box">过 150k：空闲 50 分钟唤醒保住缓存</text>
-<text x="32" y="418" font-size="13.5" fill="#e6edf3" data-box="stop-box">唤醒前先探测 API，连不上就重探，</text>
-<text x="32" y="438" font-size="13.5" fill="#e6edf3" data-box="stop-box">每 30 秒一次，过 57 分钟就放弃</text>
-<text x="32" y="458" font-size="13.5" fill="#e6edf3" data-box="stop-box">在后台运行，不拦停</text>
-<text x="32" y="478" font-size="13.5" fill="#e6edf3" data-box="stop-box">距用户本人最后一条消息满 8 小时为止</text>
-<text x="32" y="498" font-size="13.5" fill="#e6edf3" data-box="stop-box">最后一次唤醒：还有事就写交接</text>
+<rect id="stop-box" x="16.75" y="190.75" width="302.5" height="576.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
+<text x="168" y="219" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="stop-box">Stop 钩子</text>
+<line x1="17.5" y1="228" x2="318.5" y2="228" stroke="#3d444d" stroke-width="1"/>
+<text x="32" y="250" font-size="13.5" font-weight="600" fill="#e6edf3" data-box="stop-box">上下文水位闸门</text>
+<text x="32" y="270" font-size="13.5" fill="#e6edf3" data-box="stop-box">过 35%：每个会话提醒一次，放行</text>
+<text x="32" y="290" font-size="13.5" fill="#e6edf3" data-box="stop-box">过 40%：拦一次</text>
+<text x="32" y="310" font-size="13.5" fill="#e6edf3" data-box="stop-box">越线后再涨 5 个点：再拦，立即写交接</text>
+<line x1="17.5" y1="322" x2="318.5" y2="322" stroke="#3d444d" stroke-width="1"/>
+<text x="32" y="344" font-size="13.5" font-weight="600" fill="#e6edf3" data-box="stop-box">任务清单闸门</text>
+<text x="32" y="364" font-size="13.5" fill="#e6edf3" data-box="stop-box">会话的任务清单里还有 todo 或</text>
+<text x="32" y="384" font-size="13.5" fill="#e6edf3" data-box="stop-box">doing 项时拦下收工</text>
+<text x="32" y="404" font-size="12" fill="#9198a1" data-box="stop-box">~/.claude/state/checklists/&lt;会话 id&gt;.json</text>
+<text x="32" y="424" font-size="13.5" fill="#e6edf3" data-box="stop-box">放行：有后台任务或定时任务在等，</text>
+<text x="32" y="444" font-size="13.5" fill="#e6edf3" data-box="stop-box">或在子智能体里，</text>
+<text x="32" y="464" font-size="13.5" fill="#e6edf3" data-box="stop-box">或清单没变时已拦满 3 次</text>
+<line x1="17.5" y1="476" x2="318.5" y2="476" stroke="#3d444d" stroke-width="1"/>
+<text x="32" y="498" font-size="13.5" font-weight="600" fill="#e6edf3" data-box="stop-box">回复出口</text>
+<text x="32" y="518" font-size="13.5" fill="#e6edf3" data-box="stop-box">末句是提议问句，</text>
+<text x="32" y="538" font-size="13.5" fill="#e6edf3" data-box="stop-box">或回复不是中文时，拦一次</text>
+<line x1="17.5" y1="550" x2="318.5" y2="550" stroke="#3d444d" stroke-width="1"/>
+<text x="32" y="572" font-size="13.5" font-weight="600" fill="#e6edf3" data-box="stop-box">缓存保活</text>
+<text x="32" y="592" font-size="13.5" fill="#e6edf3" data-box="stop-box">过 150k：空闲 50 分钟唤醒保住缓存</text>
+<text x="32" y="612" font-size="13.5" fill="#e6edf3" data-box="stop-box">唤醒前先探测 API，连不上就重探，</text>
+<text x="32" y="632" font-size="13.5" fill="#e6edf3" data-box="stop-box">每 30 秒一次，过 57 分钟就放弃</text>
+<text x="32" y="652" font-size="13.5" fill="#e6edf3" data-box="stop-box">在后台运行，不拦停</text>
+<text x="32" y="672" font-size="13.5" fill="#e6edf3" data-box="stop-box">距用户本人最后一条消息满 8 小时为止</text>
+<text x="32" y="692" font-size="13.5" fill="#e6edf3" data-box="stop-box">最后一次唤醒：还有事就写交接</text>
+<text x="32" y="712" font-size="13.5" fill="#e6edf3" data-box="stop-box">唤醒回了「完」：停到用户下一条消息</text>
+<text x="32" y="732" font-size="13.5" fill="#e6edf3" data-box="stop-box">SessionEnd 时：标记会话已结束，</text>
+<text x="32" y="752" font-size="13.5" fill="#e6edf3" data-box="stop-box">旧计时器不会唤醒新会话</text>
 </g>
-<path d="M600,205 L320,205" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="452" y="196" font-size="12.5" text-anchor="middle" fill="#c9d1d9">想结束这一轮</text>
-<path d="M320,265 L600,265" fill="none" stroke="#f0883e" stroke-width="2" marker-end="url(#back)"/>
-<text x="452" y="256" font-size="12.5" font-weight="600" text-anchor="middle" fill="#ffa657">同步闸门拦下：回到主线程</text>
-<text x="452" y="285" font-size="12.5" text-anchor="middle" fill="#ffa657">回复出口：做掉提议的那一步，或用中文重写</text>
-<text x="452" y="303" font-size="12.5" text-anchor="middle" fill="#ffa657">水位闸门：剩下的是收尾就做完；</text>
-<text x="452" y="321" font-size="12.5" text-anchor="middle" fill="#ffa657">接下来是新的大块工作：用 handoff 技能</text>
-<text x="452" y="339" font-size="12.5" text-anchor="middle" fill="#ffa657">生成交接，提示换会话</text>
-<text x="452" y="361" font-size="12.5" text-anchor="middle" fill="#9198a1">两个同步闸门各只拦一次：</text>
-<text x="452" y="379" font-size="12.5" text-anchor="middle" fill="#9198a1">被拦后续跑的那一轮再想停就放行</text>
-<path d="M320,450 L588,450 L588,305 L600,305" fill="none" stroke="#f0883e" stroke-width="2" marker-end="url(#back)"/>
-<text x="452" y="403" font-size="12.5" font-weight="600" text-anchor="middle" fill="#ffa657">保活：空闲 50 分钟后台唤醒，</text>
-<text x="452" y="421" font-size="12.5" text-anchor="middle" fill="#ffa657">主线程只回一个句点；</text>
-<text x="452" y="439" font-size="12.5" text-anchor="middle" fill="#ffa657">最后一次：还有事就写交接</text>
-<path d="M100,514 L100,584" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="112" y="553" font-size="12.5" text-anchor="start" fill="#c9d1d9">都放行</text>
-<g id="user">
-<rect id="user-box" x="16.75" y="584.75" width="302.5" height="56.5" rx="8" fill="#0d1117" stroke="#9198a1" stroke-width="1.5"/>
-<text x="168" y="608" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="user-box">用户</text>
-<text x="168" y="629" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="user-box">回复到达用户</text>
-</g>
+<path d="M600,245 L320,245" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="452" y="236" font-size="12.5" text-anchor="middle" fill="#c9d1d9">想结束这一轮</text>
+<path d="M320,305 L600,305" fill="none" stroke="#f0883e" stroke-width="2" marker-end="url(#back)"/>
+<text x="452" y="296" font-size="12.5" font-weight="600" text-anchor="middle" fill="#ffa657">同步闸门拦下：回到主线程</text>
+<text x="452" y="325" font-size="12.5" text-anchor="middle" fill="#ffa657">任务清单闸门：接着做未完成项</text>
+<text x="452" y="343" font-size="12.5" text-anchor="middle" fill="#ffa657">回复出口：做掉提议的一步或用中文重写</text>
+<text x="452" y="361" font-size="12.5" text-anchor="middle" fill="#ffa657">水位闸门：剩下的是收尾就做完；</text>
+<text x="452" y="379" font-size="12.5" text-anchor="middle" fill="#ffa657">接下来是新的大块工作：用 handoff 技能</text>
+<text x="452" y="397" font-size="12.5" text-anchor="middle" fill="#ffa657">生成交接，提示换会话</text>
+<text x="452" y="433" font-size="12.5" text-anchor="middle" fill="#9198a1">回复出口与水位闸门各只拦一次：</text>
+<text x="452" y="451" font-size="12.5" text-anchor="middle" fill="#9198a1">被拦后续跑的那一轮再想停就放行</text>
+<path d="M320,612 L588,612 L588,345 L600,345" fill="none" stroke="#f0883e" stroke-width="2" marker-end="url(#back)"/>
+<text x="452" y="540" font-size="12.5" font-weight="600" text-anchor="middle" fill="#ffa657">保活：空闲 50 分钟后台唤醒，</text>
+<text x="452" y="558" font-size="12.5" text-anchor="middle" fill="#ffa657">主线程只回一个句点，</text>
+<text x="452" y="576" font-size="12.5" text-anchor="middle" fill="#ffa657">做完或已交接则回「完」；</text>
+<text x="452" y="594" font-size="12.5" text-anchor="middle" fill="#ffa657">最后一次：还有事就写交接</text>
 <g id="handoff">
-<rect id="handoff-box" x="344.75" y="470.75" width="198.5" height="56.5" rx="8" fill="#0d1117" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="5 3"/>
-<text x="444" y="494" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="handoff-box">交接文件</text>
-<text x="444" y="515" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="handoff-box">只经 handoff 技能生成</text>
+<rect id="handoff-box" x="344.75" y="640.75" width="198.5" height="56.5" rx="8" fill="#0d1117" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="5 3"/>
+<text x="444" y="664" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="handoff-box">交接文件</text>
+<text x="444" y="685" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="handoff-box">只经 handoff 技能生成</text>
 </g>
-<path d="M620,330 L620,498 L544,498" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="632" y="400" font-size="12.5" text-anchor="start" fill="#c9d1d9">经 handoff 技能：</text>
-<text x="632" y="418" font-size="12.5" text-anchor="start" fill="#c9d1d9">researcher 写出</text>
-<text x="632" y="436" font-size="12.5" text-anchor="start" fill="#c9d1d9">HANDOFF.new.md，</text>
-<text x="632" y="454" font-size="12.5" text-anchor="start" fill="#c9d1d9">finalize.sh 落位</text>
+<path d="M620,370 L620,669 L544,669" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="632" y="470" font-size="12.5" text-anchor="start" fill="#c9d1d9">经 handoff 技能：</text>
+<text x="632" y="488" font-size="12.5" text-anchor="start" fill="#c9d1d9">主线程自己写出</text>
+<text x="632" y="506" font-size="12.5" text-anchor="start" fill="#c9d1d9">HANDOFF.new.md，</text>
+<text x="632" y="524" font-size="12.5" text-anchor="start" fill="#c9d1d9">finalize.sh 落位成</text>
+<text x="632" y="542" font-size="12.5" text-anchor="start" fill="#c9d1d9">HANDOFF.md</text>
 <g id="newsession">
-<rect id="new-box" x="344.75" y="590.75" width="198.5" height="56.5" rx="8" fill="#0d1117" stroke="#9198a1" stroke-width="1.5"/>
-<text x="444" y="614" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="new-box">新会话</text>
-<text x="444" y="635" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="new-box">读交接文件，接着做</text>
+<rect id="new-box" x="344.75" y="760.75" width="198.5" height="56.5" rx="8" fill="#0d1117" stroke="#9198a1" stroke-width="1.5"/>
+<text x="444" y="784" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="new-box">新会话</text>
+<text x="444" y="805" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="new-box">读交接文件，接着做</text>
 </g>
-<path d="M444,528 L444,590" fill="none" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
-<text x="434" y="562" font-size="12.5" text-anchor="end" fill="#c9d1d9">开场读取</text>
-<path d="M770,330 L770,530" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="782" y="400" font-size="12.5" text-anchor="start" fill="#c9d1d9">工具调用</text>
-<path d="M1182,376 L1182,400 L880,400 L880,530" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="1194" y="392" font-size="12.5" text-anchor="start" fill="#c9d1d9">工具调用</text>
+<path d="M444,700 L444,760" fill="none" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+<text x="434" y="734" font-size="12.5" text-anchor="end" fill="#c9d1d9">开场读取</text>
+<path d="M100,768 L100,828" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="112" y="803" font-size="12.5" text-anchor="start" fill="#c9d1d9">都放行</text>
+<g id="user">
+<rect id="user-box" x="16.75" y="828.75" width="302.5" height="56.5" rx="8" fill="#0d1117" stroke="#9198a1" stroke-width="1.5"/>
+<text x="168" y="852" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="user-box">用户</text>
+<text x="168" y="873" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="user-box">回复到达用户</text>
+</g>
+<path d="M800,370 L800,709" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="812" y="440" font-size="12.5" text-anchor="start" fill="#c9d1d9">工具调用</text>
+<path d="M1080,400 L880,400 L880,709" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="980" y="392" font-size="12.5" text-anchor="middle" fill="#c9d1d9">工具调用</text>
+<path d="M1080,560 L910,560 L910,709" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="995" y="552" font-size="12.5" text-anchor="middle" fill="#c9d1d9">工具调用</text>
 <g id="caller">
-<rect id="caller-box" x="600.75" y="530.75" width="338.5" height="58.5" rx="8" fill="#0c2d6b" stroke="#4493f8" stroke-width="1.5"/>
-<text x="770" y="555" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="caller-box">发起调用的线程</text>
-<text x="770" y="576" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="caller-box">主线程或子智能体</text>
+<rect id="caller-box" x="600.75" y="709.75" width="338.5" height="58.5" rx="8" fill="#0c2d6b" stroke="#4493f8" stroke-width="1.5"/>
+<text x="770" y="733" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="caller-box">发起调用的线程</text>
+<text x="770" y="754" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="caller-box">主线程、子智能体或工人</text>
 </g>
-<path d="M770,590 L770,640" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path d="M770,769 L770,819" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
 <g id="pre">
-<rect id="pre-box" x="600.75" y="640.75" width="338.5" height="252.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
-<text x="616" y="666" font-size="15" font-weight="600" fill="#e6edf3" data-box="pre-box">PreToolUse</text>
-<text x="924" y="666" font-size="12.5" text-anchor="end" fill="#9198a1" data-box="pre-box">工具执行之前</text>
-<line x1="601.5" y1="678" x2="938.5" y2="678" stroke="#3d444d" stroke-width="1"/>
-<text x="616" y="700" font-size="13.5" fill="#e6edf3" data-box="pre-box">拦嵌套派发（只在子智能体内）</text>
-<text x="616" y="726" font-size="13.5" fill="#e6edf3" data-box="pre-box">拦 git commit --no-verify</text>
-<text x="616" y="752" font-size="13.5" fill="#e6edf3" data-box="pre-box">密钥守卫：拦会打印密钥值的调用</text>
-<text x="616" y="778" font-size="13.5" fill="#e6edf3" data-box="pre-box">只读守卫：researcher 与 retriever 子智能体</text>
-<text x="628" y="798" font-size="13.5" fill="#e6edf3" data-box="pre-box">只准新建文件</text>
-<text x="616" y="824" font-size="13.5" fill="#e6edf3" data-box="pre-box">交接守卫：拦直接改写 HANDOFF.md</text>
-<text x="616" y="850" font-size="13.5" fill="#e6edf3" data-box="pre-box">生产合并闸门：生产仓库的 gh pr merge</text>
-<text x="628" y="870" font-size="13.5" fill="#e6edf3" data-box="pre-box">等用户当场同意</text>
+<rect id="pre-box" x="600.75" y="819.75" width="338.5" height="318.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
+<text x="616" y="845" font-size="15" font-weight="600" fill="#e6edf3" data-box="pre-box">PreToolUse</text>
+<text x="924" y="845" font-size="12.5" text-anchor="end" fill="#9198a1" data-box="pre-box">工具执行之前</text>
+<line x1="601.5" y1="857" x2="938.5" y2="857" stroke="#3d444d" stroke-width="1"/>
+<text x="616" y="879" font-size="13.5" fill="#e6edf3" data-box="pre-box">拦嵌套派发，haiku 工人除外</text>
+<text x="628" y="899" font-size="13.5" fill="#e6edf3" data-box="pre-box">（只在子智能体内）</text>
+<text x="616" y="925" font-size="13.5" fill="#e6edf3" data-box="pre-box">拦 git commit --no-verify</text>
+<text x="616" y="951" font-size="13.5" fill="#e6edf3" data-box="pre-box">密钥守卫（Bash、Read、Grep）：</text>
+<text x="628" y="971" font-size="13.5" fill="#e6edf3" data-box="pre-box">拦会打印密钥值的调用</text>
+<text x="616" y="997" font-size="13.5" fill="#e6edf3" data-box="pre-box">只读守卫：researcher 与 retriever 子智能体</text>
+<text x="628" y="1017" font-size="13.5" fill="#e6edf3" data-box="pre-box">只准新建文件</text>
+<text x="616" y="1043" font-size="13.5" fill="#e6edf3" data-box="pre-box">交接守卫：拦直接改写 HANDOFF.md</text>
+<text x="616" y="1069" font-size="13.5" fill="#e6edf3" data-box="pre-box">生产合并闸门：生产仓库的 gh pr merge</text>
+<text x="628" y="1089" font-size="13.5" fill="#e6edf3" data-box="pre-box">等用户当场同意</text>
+<line x1="601.5" y1="1103" x2="938.5" y2="1103" stroke="#3d444d" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="616" y="1125" font-size="12.5" fill="#9198a1" data-box="pre-box">守卫拒绝时：追加一行到拒绝日志</text>
 </g>
-<path d="M770,894 L770,938" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="782" y="920" font-size="12.5" text-anchor="start" fill="#c9d1d9">放行</text>
+<path d="M770,1139 L770,1183" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="782" y="1165" font-size="12.5" text-anchor="start" fill="#c9d1d9">放行</text>
 <g id="tool">
-<rect id="tool-box" x="600.75" y="938.75" width="338.5" height="40.5" rx="8" fill="#0d1117" stroke="#9198a1" stroke-width="1.5"/>
-<text x="770" y="964" font-size="13.5" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="tool-box">工具执行</text>
+<rect id="tool-box" x="600.75" y="1183.75" width="338.5" height="40.5" rx="8" fill="#0d1117" stroke="#9198a1" stroke-width="1.5"/>
+<text x="770" y="1209" font-size="13.5" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="tool-box">工具执行</text>
 </g>
-<path d="M770,980 L770,1024" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path d="M770,1225 L770,1269" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
 <g id="post">
-<rect id="post-box" x="600.75" y="1024.75" width="338.5" height="128.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
-<text x="616" y="1050" font-size="15" font-weight="600" fill="#e6edf3" data-box="post-box">PostToolUse</text>
-<text x="924" y="1050" font-size="12.5" text-anchor="end" fill="#9198a1" data-box="post-box">工具执行之后</text>
-<line x1="601.5" y1="1062" x2="938.5" y2="1062" stroke="#3d444d" stroke-width="1"/>
-<text x="616" y="1084" font-size="13.5" fill="#e6edf3" data-box="post-box">规则文件提醒：改了规则文件时</text>
-<text x="616" y="1110" font-size="13.5" fill="#e6edf3" data-box="post-box">工作树链接：进入新工作树时建软链，</text>
-<text x="628" y="1130" font-size="13.5" fill="#e6edf3" data-box="post-box">只改磁盘，不回话</text>
+<rect id="post-box" x="600.75" y="1269.75" width="338.5" height="148.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
+<text x="616" y="1295" font-size="15" font-weight="600" fill="#e6edf3" data-box="post-box">PostToolUse</text>
+<text x="924" y="1295" font-size="12.5" text-anchor="end" fill="#9198a1" data-box="post-box">工具执行之后</text>
+<line x1="601.5" y1="1307" x2="938.5" y2="1307" stroke="#3d444d" stroke-width="1"/>
+<text x="616" y="1329" font-size="13.5" fill="#e6edf3" data-box="post-box">规则文件提醒：改了规则文件时，</text>
+<text x="628" y="1349" font-size="13.5" fill="#e6edf3" data-box="post-box">作为附加上下文</text>
+<text x="616" y="1375" font-size="13.5" fill="#e6edf3" data-box="post-box">工作树链接：进入新工作树时建软链，</text>
+<text x="628" y="1395" font-size="13.5" fill="#e6edf3" data-box="post-box">只改磁盘，不回话</text>
 </g>
-<path d="M940,761 L1004,761 L1004,560 L940,560" fill="none" stroke="#f0883e" stroke-width="2" marker-end="url(#back)"/>
-<text x="1018" y="640" font-size="12.5" font-weight="600" text-anchor="start" fill="#ffa657">拒绝：理由回到发起</text>
-<text x="1018" y="658" font-size="12.5" text-anchor="start" fill="#ffa657">调用的线程，线程</text>
-<text x="1018" y="676" font-size="12.5" text-anchor="start" fill="#ffa657">换一种做法</text>
-<path d="M600,1084 L566,1084 L566,570 L600,570" fill="none" stroke="#f0883e" stroke-width="2" marker-end="url(#back)"/>
-<text x="552" y="836" font-size="12.5" text-anchor="end" fill="#ffa657">工具结果与作为附加上下文的</text>
-<text x="552" y="854" font-size="12.5" text-anchor="end" fill="#ffa657">规则文件提醒，回到发起</text>
-<text x="552" y="872" font-size="12.5" text-anchor="end" fill="#ffa657">调用的线程</text>
+<path d="M940,917 L1004,917 L1004,739 L940,739" fill="none" stroke="#f0883e" stroke-width="2" marker-end="url(#back)"/>
+<text x="1018" y="817" font-size="12.5" font-weight="600" text-anchor="start" fill="#ffa657">拒绝：理由回到发起</text>
+<text x="1018" y="835" font-size="12.5" text-anchor="start" fill="#ffa657">调用的线程，线程</text>
+<text x="1018" y="853" font-size="12.5" text-anchor="start" fill="#ffa657">换一种做法</text>
+<path d="M600,1329 L566,1329 L566,749 L600,749" fill="none" stroke="#f0883e" stroke-width="2" marker-end="url(#back)"/>
+<text x="552" y="1173" font-size="12.5" text-anchor="end" fill="#ffa657">工具结果与作为附加上下文的</text>
+<text x="552" y="1191" font-size="12.5" text-anchor="end" fill="#ffa657">规则文件提醒，回到发起</text>
+<text x="552" y="1209" font-size="12.5" text-anchor="end" fill="#ffa657">调用的线程</text>
 <g id="limitpause">
-<rect id="limit-box" x="1030.75" y="720.75" width="252.5" height="186.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
-<text x="1046" y="746" font-size="15" font-weight="600" fill="#e6edf3" data-box="limit-box">限额暂停</text>
-<line x1="1031.5" y1="758" x2="1282.5" y2="758" stroke="#3d444d" stroke-width="1"/>
-<text x="1046" y="780" font-size="13.5" fill="#e6edf3" data-box="limit-box">5 小时用量到 95% 及以上：</text>
-<text x="1046" y="800" font-size="13.5" fill="#e6edf3" data-box="limit-box">把调用挂起到重置；</text>
-<text x="1046" y="820" font-size="13.5" fill="#e6edf3" data-box="limit-box">每 50 分钟拒绝一次，线程</text>
-<text x="1046" y="840" font-size="13.5" fill="#e6edf3" data-box="limit-box">发出暂停调用，再被挂起</text>
-<line x1="1031.5" y1="852" x2="1282.5" y2="852" stroke="#3d444d" stroke-width="1" stroke-dasharray="3 3"/>
-<text x="1046" y="874" font-size="13.5" fill="#e6edf3" data-box="limit-box">放行：用户本人在 95% 之后</text>
-<text x="1046" y="894" font-size="13.5" fill="#e6edf3" data-box="limit-box">的输入，最后一次保活唤醒</text>
+<rect id="limit-box" x="1030.75" y="899.75" width="252.5" height="186.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
+<text x="1046" y="925" font-size="15" font-weight="600" fill="#e6edf3" data-box="limit-box">限额暂停</text>
+<line x1="1031.5" y1="937" x2="1282.5" y2="937" stroke="#3d444d" stroke-width="1"/>
+<text x="1046" y="959" font-size="13.5" fill="#e6edf3" data-box="limit-box">5 小时用量到 95% 及以上：</text>
+<text x="1046" y="979" font-size="13.5" fill="#e6edf3" data-box="limit-box">把调用挂起到重置；</text>
+<text x="1046" y="999" font-size="13.5" fill="#e6edf3" data-box="limit-box">每 50 分钟拒绝一次，线程</text>
+<text x="1046" y="1019" font-size="13.5" fill="#e6edf3" data-box="limit-box">发出暂停调用，再被挂起</text>
+<line x1="1031.5" y1="1031" x2="1282.5" y2="1031" stroke="#3d444d" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="1046" y="1053" font-size="13.5" fill="#e6edf3" data-box="limit-box">放行：用户本人在 95% 之后</text>
+<text x="1046" y="1073" font-size="13.5" fill="#e6edf3" data-box="limit-box">的输入，最后一次保活唤醒</text>
 </g>
-<path d="M940,850 L1030,850" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="985" y="841" font-size="12.5" text-anchor="middle" fill="#c9d1d9">挂起</text>
-<path d="M1030,745 L1004,745" fill="none" stroke="#f0883e" stroke-width="2"/>
-<path d="M1056,908 L1056,959 L940,959" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="1068" y="937" font-size="12.5" text-anchor="start" fill="#c9d1d9">到重置时放行</text>
+<path d="M940,1029 L1030,1029" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="985" y="1020" font-size="12.5" text-anchor="middle" fill="#c9d1d9">挂起</text>
+<path d="M1030,924 L1004,924" fill="none" stroke="#f0883e" stroke-width="2"/>
+<path d="M1056,1087 L1056,1204 L940,1204" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="1068" y="1182" font-size="12.5" text-anchor="start" fill="#c9d1d9">到重置时放行</text>
 <g id="statusline">
-<rect id="status-box" x="1030.75" y="1024.75" width="252.5" height="76.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
-<text x="1157" y="1050" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="status-box">状态栏</text>
-<text x="1157" y="1070" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="status-box">statusline-tee.sh 记下</text>
-<text x="1157" y="1088" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="status-box">每次响应带来的 rate_limits</text>
+<rect id="status-box" x="1030.75" y="1269.75" width="252.5" height="76.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
+<text x="1157" y="1295" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="status-box">状态栏</text>
+<text x="1157" y="1315" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="status-box">statusline-tee.sh 记下</text>
+<text x="1157" y="1333" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="status-box">每次响应带来的 rate_limits</text>
 </g>
-<path d="M1230,1024 L1230,908" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="1218" y="985" font-size="12.5" text-anchor="end" fill="#c9d1d9">用量文件：</text>
-<text x="1218" y="1003" font-size="12.5" text-anchor="end" fill="#c9d1d9">rate-limits.json</text>
+<path d="M1230,1269 L1230,1087" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="1218" y="1230" font-size="12.5" text-anchor="end" fill="#c9d1d9">用量文件：</text>
+<text x="1218" y="1248" font-size="12.5" text-anchor="end" fill="#c9d1d9">rate-limits.json</text>
+<g id="permissiondenied">
+<rect id="pd-box" x="16.75" y="961.75" width="302.5" height="60.5" rx="8" fill="#151b23" stroke="#9198a1" stroke-width="1.5"/>
+<text x="168" y="987" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="pd-box">PermissionDenied 钩子</text>
+<text x="168" y="1009" font-size="12.5" text-anchor="middle" fill="#9198a1" data-box="pd-box">自动模式分类器的拒绝</text>
+</g>
+<path d="M168,1023 L168,1091" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="180" y="1051" font-size="12.5" text-anchor="start" fill="#c9d1d9">只记日志，不回话，</text>
+<text x="180" y="1069" font-size="12.5" text-anchor="start" fill="#c9d1d9">不影响控制流</text>
+<g id="denylog">
+<rect id="log-box" x="16.75" y="1091.75" width="302.5" height="56.5" rx="8" fill="#0d1117" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="5 3"/>
+<text x="168" y="1115" font-size="15" font-weight="600" text-anchor="middle" fill="#e6edf3" data-box="log-box">拒绝日志</text>
+<text x="168" y="1136" font-size="12" text-anchor="middle" fill="#9198a1" data-box="log-box">~/.claude/state/permission-denied.jsonl</text>
+</g>
+<path d="M600,1120 L320,1120" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="450" y="1112" font-size="12.5" text-anchor="middle" fill="#c9d1d9">守卫的拒绝</text>
 <g id="legend">
-<path d="M16,1110 L60,1110" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="72" y="1114.5" font-size="12.5" fill="#c9d1d9">调用或结果向前走</text>
-<path d="M16,1136 L60,1136" fill="none" stroke="#f0883e" stroke-width="2" marker-end="url(#back)"/>
-<text x="72" y="1140.5" font-size="12.5" fill="#ffa657">拦下、回弯或唤醒：控制回到线程</text>
+<path d="M16,1389 L60,1389" fill="none" stroke="#9198a1" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="72" y="1393.5" font-size="12.5" fill="#c9d1d9">调用或结果向前走</text>
+<path d="M16,1415 L60,1415" fill="none" stroke="#f0883e" stroke-width="2" marker-end="url(#back)"/>
+<text x="72" y="1419.5" font-size="12.5" fill="#ffa657">拦下、回弯或唤醒：控制回到线程</text>
 </g>
 </svg>

@@ -125,6 +125,8 @@ cache 95 0.5;   report allow "$(verdict)" "离重置不到一轮：睡到重置�
 s=$(cat "$TMP/secs"); report yes "$(python3 -c "print('yes' if 0.4 <= $s < 0.95 else 'no')")" "只睡到重置为止（${s}s）"
 cache 95 0.5;   report approve "$(verdict ': 限额暂停')" "暂停命令到重置后放行，并跳过权限审批"
 cache 95 7200;  report deny "$(verdict ': 限额暂停')" "暂停命令未到重置：睡一轮后再拦下"
+report yes "$(python3 -c "import json,sys;r=json.load(open(sys.argv[1]))['hookSpecificOutput']['permissionDecisionReason'];print('yes' if '暂停前最后被拦下' in r and '刚才被拦下的调用' not in r else r)" "$TMP/out")" "暂停命令被拦时指回暂停前最后被拦下的调用"
+report yes "$(cache 95 7200; verdict >/dev/null; python3 -c "import json,sys;r=json.load(open(sys.argv[1]))['hookSpecificOutput']['permissionDecisionReason'];print('yes' if '刚才被拦下的调用' in r else r)" "$TMP/out")" "其他调用被拦时仍指刚才被拦下的调用"
 cache 50 7200;  report approve "$(verdict ': 限额暂停')" "用量已低于阈值时暂停命令也跳过审批"
 echo "── 两个来源取未过重置的最高值（同一窗口内用量只增不减，较低的是旧值） ──"
 cache 50 7200; sleep 0.1; rl 96 7200; report deny  "$(verdict)" "插件缓存 50%、状态栏数据 96%：拦下"

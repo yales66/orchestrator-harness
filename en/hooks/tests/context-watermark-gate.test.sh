@@ -126,6 +126,15 @@ reason_has "再拦指向 handoff 技能" yes "现在就用 handoff 技能落盘�
 reason_has "再拦不再指向 playbook §3" no "playbook §3" "$(again sp-h2)"
 reason_has "再拦末尾附 transcript 路径" yes "（transcript: ${T_HIGHER}）" "$(again sp-h3)"
 
+echo "── 拦截理由指向 handoff 技能第 4 步接力，不报水位数字 ──"
+reason_has "首次拦截指向 handoff 技能第 4 步接力" yes "handoff 技能第 4 步" "$FIRST"
+reason_has "首次拦截不报百分比" no "%" "$FIRST"
+reason_has "首次拦截不让用户换新会话" no "换新会话" "$FIRST"
+reason_has "再拦指向 handoff 技能第 4 步接力" yes "handoff 技能第 4 步" "$(again sp-r1)"
+reason_has "再拦不报百分比" no "%" "$(again sp-r4)"
+reason_has "再拦不让用户换新会话" no "换新会话" "$(again sp-r2)"
+reason_has "再拦不报上涨了几个点" no "个点" "$(again sp-r3)"
+
 SPW="$TMP/scratchpad-warn"; mkdir -p "$SPW"
 check warn  "首次过提醒线提醒一次" \
   "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T_WARN\",\"scratchpad_dir\":\"$SPW\"}"
