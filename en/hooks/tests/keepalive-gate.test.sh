@@ -127,13 +127,15 @@ end_session() {
 # 连不上时每 0.2 秒再探；探测地址取 $PROBE，缺省连得上。动作在钩子起跑 0.5 秒后执行。
 # 入口取 $EP，缺省为交互终端的 cli。
 verdict() {
-  local p="$1" act="$2" rc
+  local p="$1" act="$2" rc apid=""
   if [ ! -f "$HOOK" ]; then echo "脚本不存在"; return; fi
-  if [ -n "$act" ]; then (sleep 0.5; eval "$act") & fi
+  if [ -n "$act" ]; then (sleep 0.5; eval "$act") & apid=$!; fi
   printf '%s' "$p" | CLAUDE_CODE_ENTRYPOINT="${EP:-cli}" KEEPALIVE_ENDED_DIR="$ENDED" KEEPALIVE_SHARDING_DIR="$SHARD" KEEPALIVE_SLEEP="${SL:-1}" KEEPALIVE_DEADLINE="${DL:-3}" \
     KEEPALIVE_RETRY=0.2 KEEPALIVE_PROBE_URL="${PROBE:-file://$UP}" bash "$HOOK" >"$TMP/out" 2>"$TMP/err"
   rc=$?
-  wait
+  # 只等本次的动作：verdict 常在 $(...) 子 shell 里跑，无参数的 wait 会去等父 shell 的后台 HTTP 服务，
+  # 那个进程不是子 shell 的子进程，Ubuntu 26.04 的 bash 在这里报 "is not a child of this shell" 并一直循环
+  if [ -n "$apid" ]; then wait "$apid"; fi
   WAKE_PROMPT="$WAKE_PROMPT" HANDOFF_PROMPT="$HANDOFF_PROMPT" python3 - "$rc" "$TMP/out" "$TMP/err" <<'PY'
 import os, sys
 rc, out, err = sys.argv[1], open(sys.argv[2], "rb").read(), open(sys.argv[3], "rb").read()
